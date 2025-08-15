@@ -2,6 +2,7 @@ import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { linter, lintGutter } from '@codemirror/lint';
 import type { CompilationError } from '../../types';
 import { ShaderCompiler } from '../../utils/compiler';
 
@@ -11,6 +12,7 @@ export class ShaderEditor {
   private onChangeCallback?: (code: string) => void;
   private onCompileCallback?: (errors: CompilationError[]) => void;
   private compiler?: ShaderCompiler;
+  private currentErrors: CompilationError[] = [];
 
   constructor(container: HTMLElement, initialCode: string = '') {
     this.container = container;
@@ -18,12 +20,38 @@ export class ShaderEditor {
   }
 
   private setupEditor(initialCode: string) {
+    const wgslLinter = linter((view) => {
+      const diagnostics = [];
+      
+      for (const error of this.currentErrors) {
+        const line = Math.max(0, error.line - 1);
+        const doc = view.state.doc;
+        
+        if (line < doc.lines) {
+          const lineObj = doc.line(line + 1);
+          const from = lineObj.from + Math.max(0, error.column - 1);
+          const to = Math.min(lineObj.to, from + 10); // Highlight ~10 chars or to end of line
+          
+          diagnostics.push({
+            from,
+            to,
+            severity: error.type as 'error' | 'warning',
+            message: error.message,
+          });
+        }
+      }
+      
+      return diagnostics;
+    });
+
     const state = EditorState.create({
       doc: initialCode,
       extensions: [
         basicSetup,
         javascript(), // Using JavaScript syntax for now, can be enhanced for WGSL
         oneDark,
+        lintGutter(), // Show lint gutter with error indicators
+        wgslLinter,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             const code = update.state.doc.toString();
@@ -45,6 +73,32 @@ export class ShaderEditor {
           },
           '.cm-scroller': {
             height: '100%',
+          },
+          '.cm-diagnostic': {
+            padding: '3px 6px 3px 8px',
+            marginLeft: '-1px',
+            display: 'block',
+            whiteSpace: 'pre-wrap',
+          },
+          '.cm-diagnostic-error': {
+            borderLeft: '5px solid #d32f2f',
+            backgroundColor: 'rgba(211, 47, 47, 0.1)',
+          },
+          '.cm-diagnostic-warning': {
+            borderLeft: '5px solid #f57c00',
+            backgroundColor: 'rgba(245, 124, 0, 0.1)',
+          },
+          '.cm-lintRange-error': {
+            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, #d32f2f 2px, #d32f2f 4px)',
+            backgroundPosition: 'bottom',
+            backgroundSize: '100% 2px',
+            backgroundRepeat: 'repeat-x',
+          },
+          '.cm-lintRange-warning': {
+            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, #f57c00 2px, #f57c00 4px)',
+            backgroundPosition: 'bottom',
+            backgroundSize: '100% 2px',
+            backgroundRepeat: 'repeat-x',
           },
         }),
       ],
@@ -68,7 +122,14 @@ export class ShaderEditor {
     }
 
     const allErrors = [...staticErrors, ...compilationErrors];
+    this.updateErrors(allErrors);
     this.onCompileCallback?.(allErrors);
+  }
+
+  private updateErrors(errors: CompilationError[]) {
+    this.currentErrors = errors;
+    // Force lint update
+    this.editor.dispatch({});
   }
 
   setCompiler(compiler: ShaderCompiler) {
@@ -105,12 +166,8 @@ export class ShaderEditor {
     this.editor.destroy();
   }
 
-  // Highlight compilation errors in the editor (simplified implementation)
   highlightErrors(errors: CompilationError[]) {
-    // For now, just log errors - proper error highlighting would require more complex CodeMirror setup
-    if (errors.length > 0) {
-      console.log('Shader compilation errors:', errors);
-    }
+    this.updateErrors(errors);
   }
 
   private clearErrorHighlights() {

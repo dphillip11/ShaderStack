@@ -35,6 +35,8 @@ class WebGPUShaderApp {
           <div id="editor-container" class="editor-container"></div>
         </div>
         
+        <div class="resize-handle" id="resize-handle-1"></div>
+        
         <div class="preview-panel">
           <div class="preview-header">
             <h2>Preview</h2>
@@ -46,6 +48,8 @@ class WebGPUShaderApp {
           <canvas id="webgpu-canvas" class="preview-canvas"></canvas>
         </div>
         
+        <div class="resize-handle" id="resize-handle-2"></div>
+        
         <div class="controls-panel">
           <div id="controls-container" class="controls-container"></div>
         </div>
@@ -56,6 +60,9 @@ class WebGPUShaderApp {
     this.canvas = document.querySelector('#webgpu-canvas') as HTMLCanvasElement;
     this.canvas.width = 800;
     this.canvas.height = 600;
+    
+    // Set up resize functionality
+    this.setupResizeHandles();
   }
 
   private async init() {
@@ -268,6 +275,69 @@ class WebGPUShaderApp {
         <p>Please make sure you're using a WebGPU-compatible browser (Chrome 113+, Edge 113+).</p>
       </div>
     `;
+  }
+
+  private setupResizeHandles() {
+    const shaderEditor = document.querySelector('.shader-editor') as HTMLElement;
+    const handle1 = document.querySelector('#resize-handle-1') as HTMLElement;
+    const handle2 = document.querySelector('#resize-handle-2') as HTMLElement;
+
+    let isResizing = false;
+    let currentHandle: HTMLElement | null = null;
+
+    const startResize = (e: MouseEvent, handle: HTMLElement) => {
+      isResizing = true;
+      currentHandle = handle;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      
+      e.preventDefault();
+    };
+
+    const doResize = (e: MouseEvent) => {
+      if (!isResizing || !currentHandle) return;
+
+      const rect = shaderEditor.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const totalWidth = rect.width;
+
+      if (currentHandle === handle1) {
+        // Resize between editor and preview
+        const editorPercent = Math.max(20, Math.min(60, (x / totalWidth) * 100));
+        const previewPercent = Math.max(20, Math.min(60, 80 - editorPercent));
+        const controlsWidth = 300; // Fixed width for controls
+        
+        shaderEditor.style.gridTemplateColumns = `${editorPercent}% 4px ${previewPercent}% 4px ${controlsWidth}px`;
+      } else if (currentHandle === handle2) {
+        // Resize between preview and controls
+        const controlsMinWidth = 250;
+        const controlsMaxWidth = 500;
+        const controlsWidth = Math.max(controlsMinWidth, Math.min(controlsMaxWidth, totalWidth - x));
+        const remainingWidth = totalWidth - controlsWidth - 8; // 8px for resize handles
+        const editorPercent = 50; // Keep editor at 50% of remaining width
+        const previewPercent = 50; // Keep preview at 50% of remaining width
+        
+        shaderEditor.style.gridTemplateColumns = `${(remainingWidth * editorPercent / 100)}px 4px ${(remainingWidth * previewPercent / 100)}px 4px ${controlsWidth}px`;
+      }
+    };
+
+    const stopResize = () => {
+      isResizing = false;
+      currentHandle = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    handle1.addEventListener('mousedown', (e) => startResize(e, handle1));
+    handle2.addEventListener('mousedown', (e) => startResize(e, handle2));
+    
+    document.addEventListener('mousemove', doResize);
+    document.addEventListener('mouseup', stopResize);
+    
+    // Prevent text selection during resize
+    document.addEventListener('selectstart', (e) => {
+      if (isResizing) e.preventDefault();
+    });
   }
 }
 
