@@ -267,9 +267,24 @@ export class Controls {
   }
 
   selectPass(passId: string) {
+    console.log(`selectPass called with: ${passId}, current active: ${this.activePassId}`);
+    
+    // Only proceed if this is actually a different pass
+    if (this.activePassId === passId) {
+      console.log(`Pass ${passId} is already active, skipping`);
+      return;
+    }
+    
+    // Update the active pass ID BEFORE calling the callback
     this.activePassId = passId;
+    console.log(`Updated activePassId to: ${this.activePassId}`);
+    
+    // Update UI to reflect the new active pass
     this.updatePassTabs();
     this.updateActivePassInfo();
+    
+    // Now trigger the callback with the new pass ID
+    console.log(`Calling onPassSelectCallback with: ${passId}`);
     this.onPassSelectCallback?.(passId);
   }
 

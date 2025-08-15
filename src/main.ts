@@ -16,6 +16,7 @@ class WebGPUShaderApp {
   private animationId: number = 0;
   private compileTimeout: number = 0;
   private passes: ShaderPass[] = [];
+  private currentEditingPassId: string | null = null; // Track which pass is currently being edited
 
   constructor() {
     this.setupHTML();
@@ -104,6 +105,7 @@ class WebGPUShaderApp {
       this.passes.push(imagePass);
       this.controls.addPass(imagePass);
       this.controls.selectPass('image');
+      this.currentEditingPassId = 'image'; // Set the initial editing pass
       
       // Compile and add initial pass
       await this.compileAndAddPass(imagePass);
@@ -226,47 +228,52 @@ class WebGPUShaderApp {
 
   private onPassSelect(passId: string) {
     console.log(`onPassSelect called with passId: ${passId}`);
-    console.log(`Current active pass: ${this.controls.getActivePassId()}`);
+    console.log(`Currently editing pass: ${this.currentEditingPassId}`);
     
-    // Save current shader code before switching passes
-    this.saveCurrentShaderToPass();
+    // Find the pass we're switching to
+    const targetPass = this.passes.find(p => p.id === passId);
+    if (!targetPass) {
+      console.error(`Target pass not found: ${passId}`);
+      console.log('Available passes:', this.passes.map(p => ({ id: p.id, name: p.name })));
+      return;
+    }
+    
+    // Save current editor content to the pass that was being edited
+    this.saveCurrentShaderToEditingPass();
+    
+    // Update which pass is now being edited
+    this.currentEditingPassId = passId;
     
     // Load the shader code for the selected pass into the editor
-    const pass = this.passes.find(p => p.id === passId);
-    if (pass) {
-      console.log(`Loading shader for pass ${passId}:`, pass.fragmentShader.substring(0, 100) + '...');
-      this.editor.setValue(pass.fragmentShader);
-    } else {
-      console.error(`Pass not found: ${passId}`);
-      console.log('Available passes:', this.passes.map(p => ({ id: p.id, name: p.name })));
-    }
-    console.log(`Selected pass: ${passId}`);
+    console.log(`Loading shader for pass ${passId}:`, targetPass.fragmentShader.substring(0, 100) + '...');
+    this.editor.setValue(targetPass.fragmentShader);
+    
+    console.log(`Successfully switched to editing pass: ${passId}`);
   }
 
-  private saveCurrentShaderToPass() {
-    const currentPassId = this.controls.getActivePassId();
-    if (!currentPassId) {
-      console.log('No current pass to save to');
+  private saveCurrentShaderToEditingPass() {
+    if (!this.currentEditingPassId) {
+      console.log('No pass currently being edited');
       return;
     }
 
     const currentCode = this.editor.getValue();
-    const pass = this.passes.find(p => p.id === currentPassId);
+    const pass = this.passes.find(p => p.id === this.currentEditingPassId);
     if (pass && pass.fragmentShader !== currentCode) {
-      console.log(`Saving shader code for pass: ${currentPassId}`);
+      console.log(`Saving shader code to pass: ${this.currentEditingPassId}`);
       console.log(`Code length: ${currentCode.length} characters`);
       pass.fragmentShader = currentCode;
-      console.log(`Saved shader code for pass: ${currentPassId}`);
+      console.log(`Saved shader code to pass: ${this.currentEditingPassId}`);
     } else if (!pass) {
-      console.error(`Pass not found for saving: ${currentPassId}`);
+      console.error(`Pass not found for saving: ${this.currentEditingPassId}`);
     } else {
-      console.log(`No changes to save for pass: ${currentPassId}`);
+      console.log(`No changes to save for pass: ${this.currentEditingPassId}`);
     }
   }
 
   private onAddPass(_type: PassType) {
     // Save current shader before adding new pass
-    this.saveCurrentShaderToPass();
+    this.saveCurrentShaderToEditingPass();
     
     const bufferCount = this.passes.filter(p => p.type === 'buffer').length;
     const bufferName = `Buffer ${String.fromCharCode(65 + bufferCount)}`; // A, B, C, D
