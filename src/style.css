@@ -123,15 +123,16 @@ button:focus-visible {
 /* Main Layout */
 .shader-editor {
   display: grid;
-  grid-template-columns: 1fr 4px 1fr 4px 300px;
-  grid-template-rows: 1fr;
+  grid-template-columns: 1fr 4px 1fr;
+  grid-template-rows: 1fr 4px auto;
   height: 100vh;
   background-color: var(--border-color);
+  gap: 0;
 }
 
-.editor-panel,
-.preview-panel,
-.controls-panel {
+.editor-panel {
+  grid-column: 1;
+  grid-row: 1;
   background-color: var(--bg-secondary);
   display: flex;
   flex-direction: column;
@@ -139,19 +140,52 @@ button:focus-visible {
   min-width: 200px;
 }
 
+.preview-panel {
+  grid-column: 3;
+  grid-row: 1;
+  background-color: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 200px;
+}
+
+.controls-panel {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 300px;
+  min-height: 200px;
+}
+
 /* Resize handles */
 .resize-handle {
   background-color: var(--border-color);
-  cursor: col-resize;
   position: relative;
   transition: background-color 0.2s ease;
+}
+
+.resize-handle.vertical {
+  grid-column: 2;
+  grid-row: 1;
+  cursor: col-resize;
+}
+
+.resize-handle.horizontal {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  cursor: row-resize;
 }
 
 .resize-handle:hover {
   background-color: var(--accent-primary);
 }
 
-.resize-handle::before {
+.resize-handle.vertical::before {
   content: '';
   position: absolute;
   top: 50%;
@@ -159,6 +193,18 @@ button:focus-visible {
   transform: translate(-50%, -50%);
   width: 2px;
   height: 20px;
+  background-color: var(--text-muted);
+  border-radius: 1px;
+}
+
+.resize-handle.horizontal::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 2px;
   background-color: var(--text-muted);
   border-radius: 1px;
 }

@@ -37,7 +37,7 @@ class WebGPUShaderApp {
           <div id="editor-container" class="editor-container"></div>
         </div>
         
-        <div class="resize-handle" id="resize-handle-1"></div>
+        <div class="resize-handle vertical" id="resize-handle-vertical"></div>
         
         <div class="preview-panel">
           <div class="preview-header">
@@ -50,7 +50,7 @@ class WebGPUShaderApp {
           <canvas id="webgpu-canvas" class="preview-canvas"></canvas>
         </div>
         
-        <div class="resize-handle" id="resize-handle-2"></div>
+        <div class="resize-handle horizontal" id="resize-handle-horizontal"></div>
         
         <div class="controls-panel">
           <div id="controls-container" class="controls-container"></div>
@@ -383,8 +383,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
 
   private setupResizeHandles() {
     const shaderEditor = document.querySelector('.shader-editor') as HTMLElement;
-    const handle1 = document.querySelector('#resize-handle-1') as HTMLElement;
-    const handle2 = document.querySelector('#resize-handle-2') as HTMLElement;
+    const handleVertical = document.querySelector('#resize-handle-vertical') as HTMLElement;
+    const handleHorizontal = document.querySelector('#resize-handle-horizontal') as HTMLElement;
 
     let isResizing = false;
     let currentHandle: HTMLElement | null = null;
@@ -392,7 +392,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     const startResize = (e: MouseEvent, handle: HTMLElement) => {
       isResizing = true;
       currentHandle = handle;
-      document.body.style.cursor = 'col-resize';
+      document.body.style.cursor = handle.classList.contains('vertical') ? 'col-resize' : 'row-resize';
       document.body.style.userSelect = 'none';
       
       e.preventDefault();
@@ -403,25 +403,22 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
 
       const rect = shaderEditor.getBoundingClientRect();
       const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
       const totalWidth = rect.width;
+      const totalHeight = rect.height;
 
-      if (currentHandle === handle1) {
-        // Resize between editor and preview
-        const editorPercent = Math.max(20, Math.min(60, (x / totalWidth) * 100));
-        const previewPercent = Math.max(20, Math.min(60, 80 - editorPercent));
-        const controlsWidth = 300; // Fixed width for controls
+      if (currentHandle === handleVertical) {
+        // Resize between editor and preview (vertical split)
+        const editorPercent = Math.max(20, Math.min(80, (x / totalWidth) * 100));
+        const previewPercent = 100 - editorPercent;
         
-        shaderEditor.style.gridTemplateColumns = `${editorPercent}% 4px ${previewPercent}% 4px ${controlsWidth}px`;
-      } else if (currentHandle === handle2) {
-        // Resize between preview and controls
-        const controlsMinWidth = 250;
-        const controlsMaxWidth = 500;
-        const controlsWidth = Math.max(controlsMinWidth, Math.min(controlsMaxWidth, totalWidth - x));
-        const remainingWidth = totalWidth - controlsWidth - 8; // 8px for resize handles
-        const editorPercent = 50; // Keep editor at 50% of remaining width
-        const previewPercent = 50; // Keep preview at 50% of remaining width
+        shaderEditor.style.gridTemplateColumns = `${editorPercent}% 4px ${previewPercent}%`;
+      } else if (currentHandle === handleHorizontal) {
+        // Resize between top (editor/preview) and bottom (controls)
+        const topPercent = Math.max(30, Math.min(80, (y / totalHeight) * 100));
+        const bottomPercent = 100 - topPercent;
         
-        shaderEditor.style.gridTemplateColumns = `${(remainingWidth * editorPercent / 100)}px 4px ${(remainingWidth * previewPercent / 100)}px 4px ${controlsWidth}px`;
+        shaderEditor.style.gridTemplateRows = `${topPercent}% 4px ${bottomPercent}%`;
       }
     };
 
@@ -432,8 +429,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
       document.body.style.userSelect = '';
     };
 
-    handle1.addEventListener('mousedown', (e) => startResize(e, handle1));
-    handle2.addEventListener('mousedown', (e) => startResize(e, handle2));
+    handleVertical.addEventListener('mousedown', (e) => startResize(e, handleVertical));
+    handleHorizontal.addEventListener('mousedown', (e) => startResize(e, handleHorizontal));
     
     document.addEventListener('mousemove', doResize);
     document.addEventListener('mouseup', stopResize);
