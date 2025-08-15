@@ -1,13 +1,14 @@
-import type { ShaderPass, CompilationError } from '../../types';
+import type { ShaderPass, CompilationError, PassType } from '../../types';
 
 export class Controls {
   private container: HTMLElement;
   private passes: ShaderPass[] = [];
   private activePassId: string | null = null;
   private onPassSelectCallback?: (passId: string) => void;
-  private onPassAddCallback?: () => void;
+  private onPassAddCallback?: (type: PassType) => void;
   private onPassRemoveCallback?: (passId: string) => void;
   private onPassToggleCallback?: (passId: string, enabled: boolean) => void;
+  private onChannelUpdateCallback?: (passId: string, channelIndex: number, source: string) => void;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -19,13 +20,55 @@ export class Controls {
       <div class="controls">
         <div class="controls-header">
           <h3>Shader Passes</h3>
-          <button id="add-pass" class="btn btn-primary">+ Add Pass</button>
+          <div class="pass-controls">
+            <button id="add-buffer" class="btn btn-primary btn-sm">+ Buffer</button>
+          </div>
         </div>
-        <div id="pass-list" class="pass-list"></div>
+        
+        <div class="pass-tabs">
+          <div id="pass-tabs-list" class="tabs-list"></div>
+        </div>
+        
+        <div id="active-pass-info" class="active-pass-info">
+          <div class="pass-channels">
+            <h4>Input Channels</h4>
+            <div id="channels-list" class="channels-list">
+              <div class="channel-item">
+                <label>iChannel0: <select class="channel-select" data-channel="0">
+                  <option value="">None</option>
+                </select></label>
+              </div>
+              <div class="channel-item">
+                <label>iChannel1: <select class="channel-select" data-channel="1">
+                  <option value="">None</option>
+                </select></label>
+              </div>
+              <div class="channel-item">
+                <label>iChannel2: <select class="channel-select" data-channel="2">
+                  <option value="">None</option>
+                </select></label>
+              </div>
+              <div class="channel-item">
+                <label>iChannel3: <select class="channel-select" data-channel="3">
+                  <option value="">None</option>
+                </select></label>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="controls-section">
+          <h4>Available Buffers</h4>
+          <div id="buffer-preview" class="buffer-preview">
+            <div class="no-buffers">No buffer passes created</div>
+          </div>
+        </div>
+        
         <div class="controls-section">
           <h4>Compilation Errors</h4>
           <div id="error-list" class="error-list"></div>
         </div>
+        
         <div class="controls-section">
           <h4>Render Settings</h4>
           <label>
@@ -37,7 +80,6 @@ export class Controls {
               <option value="512x512">512x512</option>
               <option value="1024x1024" selected>1024x1024</option>
               <option value="1920x1080">1920x1080</option>
-              <option value="custom">Custom</option>
             </select>
           </label>
         </div>
@@ -48,88 +90,199 @@ export class Controls {
   }
 
   private bindEvents() {
-    const addPassBtn = this.container.querySelector('#add-pass') as HTMLButtonElement;
-    addPassBtn?.addEventListener('click', () => {
-      this.onPassAddCallback?.();
+    // Add buffer button
+    const addBufferBtn = this.container.querySelector('#add-buffer') as HTMLButtonElement;
+    addBufferBtn?.addEventListener('click', () => {
+      this.onPassAddCallback?.('buffer');
     });
 
+    // Channel selects
+    const channelSelects = this.container.querySelectorAll('.channel-select') as NodeListOf<HTMLSelectElement>;
+    channelSelects.forEach(select => {
+      select.addEventListener('change', (e) => {
+        const target = e.target as HTMLSelectElement;
+        const channelIndex = parseInt(target.dataset.channel || '0');
+        const source = target.value;
+        
+        if (this.activePassId) {
+          this.onChannelUpdateCallback?.(this.activePassId, channelIndex, source);
+        }
+      });
+    });
+
+    // Auto-compile checkbox
     const autoCompileCheckbox = this.container.querySelector('#auto-compile') as HTMLInputElement;
     autoCompileCheckbox?.addEventListener('change', (e) => {
       const target = e.target as HTMLInputElement;
-      this.setAutoCompile(target.checked);
+      console.log('Auto-compile:', target.checked);
     });
   }
 
   addPass(pass: ShaderPass) {
-    this.passes.push(pass);
-    this.updatePassList();
+    // Ensure Image pass is always first
+    if (pass.type === 'image') {
+      // Remove existing image pass if any
+      const existingImageIndex = this.passes.findIndex(p => p.type === 'image');
+      if (existingImageIndex !== -1) {
+        this.passes.splice(existingImageIndex, 1);
+      }
+      this.passes.unshift(pass);
+    } else {
+      this.passes.push(pass);
+    }
+    
+    this.updatePassTabs();
+    this.updateChannelOptions();
+    this.updateBufferPreview();
+    
+    // Auto-select the new pass
+    this.selectPass(pass.id);
   }
 
   removePass(passId: string) {
     const index = this.passes.findIndex(p => p.id === passId);
     if (index !== -1) {
-      this.passes.splice(index, 1);
-      if (this.activePassId === passId) {
-        this.activePassId = null;
+      const pass = this.passes[index];
+      
+      // Don't allow removing the Image pass
+      if (pass.type === 'image') {
+        console.warn('Cannot remove Image pass');
+        return;
       }
-      this.updatePassList();
+      
+      this.passes.splice(index, 1);
+      
+      if (this.activePassId === passId) {
+        this.activePassId = this.passes.find(p => p.type === 'image')?.id || null;
+      }
+      
+      this.updatePassTabs();
+      this.updateChannelOptions();
+      this.updateBufferPreview();
+      
+      // Clear references to this pass from other passes
+      this.passes.forEach(p => {
+        p.channels.forEach(channel => {
+          if (channel.source === passId) {
+            channel.source = undefined;
+          }
+        });
+      });
     }
   }
 
-  private updatePassList() {
-    const passList = this.container.querySelector('#pass-list');
-    if (!passList) return;
+  private updatePassTabs() {
+    const tabsList = this.container.querySelector('#pass-tabs-list');
+    if (!tabsList) return;
 
-    passList.innerHTML = this.passes.map(pass => `
-      <div class="pass-item ${this.activePassId === pass.id ? 'active' : ''}" data-pass-id="${pass.id}">
-        <div class="pass-header">
-          <span class="pass-name">${pass.name}</span>
-          <div class="pass-controls">
-            <label class="toggle">
-              <input type="checkbox" ${pass.enabled ? 'checked' : ''} 
-                     onchange="this.dispatchEvent(new CustomEvent('pass-toggle', {bubbles: true, detail: {passId: '${pass.id}', enabled: this.checked}}))">
-              <span class="toggle-slider"></span>
-            </label>
-            <button class="btn btn-danger btn-sm" 
-                    onclick="this.dispatchEvent(new CustomEvent('pass-remove', {bubbles: true, detail: {passId: '${pass.id}'}}))">
-              ×
-            </button>
-          </div>
-        </div>
-        <div class="pass-info">
-          <small>Inputs: ${pass.inputs.length} | Outputs: ${pass.outputs.length}</small>
-        </div>
+    const sortedPasses = [...this.passes].sort((a, b) => {
+      if (a.type === 'image') return -1;
+      if (b.type === 'image') return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    tabsList.innerHTML = sortedPasses.map(pass => `
+      <div class="pass-tab ${this.activePassId === pass.id ? 'active' : ''} ${pass.type}" 
+           data-pass-id="${pass.id}">
+        <span class="tab-name">${pass.name}</span>
+        ${pass.type === 'buffer' ? `
+          <button class="tab-remove" data-pass-id="${pass.id}">×</button>
+        ` : ''}
+        <div class="tab-indicator ${pass.enabled ? 'enabled' : 'disabled'}"></div>
       </div>
     `).join('');
 
-    // Bind pass selection events
-    passList.addEventListener('click', (e) => {
-      const passItem = (e.target as HTMLElement).closest('.pass-item');
-      if (passItem && !(e.target as HTMLElement).closest('.pass-controls')) {
-        const passId = passItem.getAttribute('data-pass-id');
-        if (passId) {
+    // Remove existing event listener and add new one
+    tabsList.removeEventListener('click', this.handleTabClick);
+    tabsList.addEventListener('click', this.handleTabClick);
+  }
+
+  private handleTabClick = (e: Event) => {
+    const target = e.target as HTMLElement;
+    
+    if (target.classList.contains('tab-remove')) {
+      const passId = target.dataset.passId;
+      if (passId) {
+        this.onPassRemoveCallback?.(passId);
+      }
+      e.stopPropagation();
+    } else {
+      const tab = target.closest('.pass-tab') as HTMLElement;
+      if (tab) {
+        const passId = tab.dataset.passId;
+        if (passId && passId !== this.activePassId) {
+          console.log(`Switching to pass: ${passId}`);
           this.selectPass(passId);
         }
       }
-    });
+    }
+  }
 
-    // Bind pass toggle events
-    passList.addEventListener('pass-toggle', (e: any) => {
-      const { passId, enabled } = e.detail;
-      this.onPassToggleCallback?.(passId, enabled);
-    });
+  private updateChannelOptions() {
+    const channelSelects = this.container.querySelectorAll('.channel-select') as NodeListOf<HTMLSelectElement>;
+    const bufferPasses = this.passes.filter(p => p.type === 'buffer');
 
-    // Bind pass remove events
-    passList.addEventListener('pass-remove', (e: any) => {
-      const { passId } = e.detail;
-      this.onPassRemoveCallback?.(passId);
+    channelSelects.forEach(select => {
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">None</option>';
+      
+      bufferPasses.forEach(pass => {
+        const option = document.createElement('option');
+        option.value = pass.id;
+        option.textContent = pass.name;
+        select.appendChild(option);
+      });
+      
+      // Restore selection if still valid
+      if (currentValue && bufferPasses.some(p => p.id === currentValue)) {
+        select.value = currentValue;
+      }
     });
+  }
+
+  private updateBufferPreview() {
+    const bufferPreview = this.container.querySelector('#buffer-preview');
+    if (!bufferPreview) return;
+
+    const bufferPasses = this.passes.filter(p => p.type === 'buffer');
+    
+    if (bufferPasses.length === 0) {
+      bufferPreview.innerHTML = '<div class="no-buffers">No buffer passes created</div>';
+    } else {
+      bufferPreview.innerHTML = bufferPasses.map(pass => `
+        <div class="buffer-item" data-pass-id="${pass.id}">
+          <div class="buffer-info">
+            <strong>${pass.name}</strong>
+            <div class="buffer-status ${pass.enabled ? 'enabled' : 'disabled'}">
+              ${pass.enabled ? 'Active' : 'Disabled'}
+            </div>
+          </div>
+          <div class="buffer-preview-texture">
+            <!-- Texture preview would go here -->
+            <div class="texture-placeholder">Texture Output</div>
+          </div>
+        </div>
+      `).join('');
+    }
   }
 
   selectPass(passId: string) {
     this.activePassId = passId;
-    this.updatePassList();
+    this.updatePassTabs();
+    this.updateActivePassInfo();
     this.onPassSelectCallback?.(passId);
+  }
+
+  private updateActivePassInfo() {
+    const activePass = this.passes.find(p => p.id === this.activePassId);
+    if (!activePass) return;
+
+    // Update channel selects to reflect current pass channels
+    const channelSelects = this.container.querySelectorAll('.channel-select') as NodeListOf<HTMLSelectElement>;
+    channelSelects.forEach((select, index) => {
+      const channel = activePass.channels.find(c => c.index === index);
+      select.value = channel?.source || '';
+    });
   }
 
   showErrors(errors: CompilationError[]) {
@@ -149,17 +302,8 @@ export class Controls {
     `).join('');
   }
 
-  private setAutoCompile(enabled: boolean) {
-    // This would be handled by the main application
-    console.log('Auto-compile:', enabled);
-  }
-
   onPassSelect(callback: (passId: string) => void) {
     this.onPassSelectCallback = callback;
-  }
-
-  onPassAdd(callback: () => void) {
-    this.onPassAddCallback = callback;
   }
 
   onPassRemove(callback: (passId: string) => void) {
@@ -168,6 +312,14 @@ export class Controls {
 
   onPassToggle(callback: (passId: string, enabled: boolean) => void) {
     this.onPassToggleCallback = callback;
+  }
+
+  onPassAdd(callback: (type: PassType) => void) {
+    this.onPassAddCallback = callback;
+  }
+
+  onChannelUpdate(callback: (passId: string, channelIndex: number, source: string) => void) {
+    this.onChannelUpdateCallback = callback;
   }
 
   getActivePassId(): string | null {

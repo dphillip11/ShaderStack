@@ -4,7 +4,7 @@ import { ShaderCompiler } from './utils/compiler';
 import { WebGPURenderer } from './components/renderer/WebGPURenderer';
 import { ShaderEditor } from './components/editor/ShaderEditor';
 import { Controls } from './components/ui/Controls';
-import type { ShaderPass, WebGPUContext } from './types';
+import type { ShaderPass, WebGPUContext, PassType } from './types';
 
 class WebGPUShaderApp {
   private canvas!: HTMLCanvasElement;
@@ -15,6 +15,7 @@ class WebGPUShaderApp {
   private controls!: Controls;
   private animationId: number = 0;
   private compileTimeout: number = 0;
+  private passes: ShaderPass[] = [];
 
   constructor() {
     this.setupHTML();
@@ -83,22 +84,29 @@ class WebGPUShaderApp {
       this.editor.setCompiler(this.compiler);
       this.setupEventHandlers();
 
-      // Create default shader pass
-      const defaultPass: ShaderPass = {
-        id: 'main',
-        name: 'Main Pass',
+      // Create default Image pass (always renders to canvas)
+      const imagePass: ShaderPass = {
+        id: 'image',
+        name: 'Image',
+        type: 'image',
         fragmentShader: ShaderCompiler.getDefaultFragmentShader(),
         vertexShader: ShaderCompiler.getDefaultVertexShader(),
-        inputs: [],
-        outputs: [],
+        channels: [
+          { index: 0, filter: 'linear', wrap: 'clamp' },
+          { index: 1, filter: 'linear', wrap: 'clamp' },
+          { index: 2, filter: 'linear', wrap: 'clamp' },
+          { index: 3, filter: 'linear', wrap: 'clamp' },
+        ],
         enabled: true,
+        renderOrder: 1000, // Image always renders last
       };
 
-      this.controls.addPass(defaultPass);
-      this.controls.selectPass('main');
+      this.passes.push(imagePass);
+      this.controls.addPass(imagePass);
+      this.controls.selectPass('image');
       
       // Compile and add initial pass
-      await this.compileAndAddPass(defaultPass);
+      await this.compileAndAddPass(imagePass);
 
       // Start render loop
       this.startRenderLoop();
@@ -112,8 +120,8 @@ class WebGPUShaderApp {
 
   private setupEventHandlers() {
     // Editor events
-    this.editor.onChange((code) => {
-      this.onShaderChange(code);
+    this.editor.onChange((_code) => {
+      this.onShaderChange();
     });
 
     this.editor.onCompile((errors) => {
@@ -126,16 +134,16 @@ class WebGPUShaderApp {
       this.onPassSelect(passId);
     });
 
-    this.controls.onPassAdd(() => {
-      this.onAddPass();
+    this.controls.onPassAdd((type) => {
+      this.onAddPass(type);
     });
 
     this.controls.onPassRemove((passId) => {
       this.onRemovePass(passId);
     });
 
-    this.controls.onPassToggle((passId, enabled) => {
-      this.onTogglePass(passId, enabled);
+    this.controls.onChannelUpdate((passId, channelIndex, source) => {
+      this.onChannelUpdate(passId, channelIndex, source);
     });
 
     // Button events
@@ -161,7 +169,7 @@ class WebGPUShaderApp {
     });
   }
 
-  private async onShaderChange(code: string) {
+  private async onShaderChange() {
     const activePassId = this.controls.getActivePassId();
     if (activePassId) {
       // Auto-compile on change with debouncing
@@ -196,45 +204,134 @@ class WebGPUShaderApp {
     }
   }
 
-  private updateShaderPass(passId: string, fragmentShader: string) {
-    // This would update the existing pass in the renderer
-    // For now, we'll just log the update
-    console.log(`Updated pass ${passId} with new shader`, { fragmentShader });
+  private async updateShaderPass(passId: string, fragmentShader: string) {
+    // Update the pass object with new shader code
+    const pass = this.passes.find(p => p.id === passId);
+    if (!pass) {
+      console.error(`Pass not found: ${passId}`);
+      return;
+    }
+
+    // Update the shader code
+    pass.fragmentShader = fragmentShader;
+    
+    // Tell the renderer to recreate the pipeline with new shader
+    try {
+      await this.renderer.updatePassShader(passId, fragmentShader);
+      console.log(`Successfully updated shader for pass: ${passId}`);
+    } catch (error) {
+      console.error(`Failed to update shader for pass ${passId}:`, error);
+    }
   }
 
   private onPassSelect(passId: string) {
+    console.log(`onPassSelect called with passId: ${passId}`);
+    console.log(`Current active pass: ${this.controls.getActivePassId()}`);
+    
+    // Save current shader code before switching passes
+    this.saveCurrentShaderToPass();
+    
     // Load the shader code for the selected pass into the editor
-    const defaultCode = ShaderCompiler.getDefaultFragmentShader();
-    this.editor.setValue(defaultCode);
+    const pass = this.passes.find(p => p.id === passId);
+    if (pass) {
+      console.log(`Loading shader for pass ${passId}:`, pass.fragmentShader.substring(0, 100) + '...');
+      this.editor.setValue(pass.fragmentShader);
+    } else {
+      console.error(`Pass not found: ${passId}`);
+      console.log('Available passes:', this.passes.map(p => ({ id: p.id, name: p.name })));
+    }
     console.log(`Selected pass: ${passId}`);
   }
 
-  private onAddPass() {
+  private saveCurrentShaderToPass() {
+    const currentPassId = this.controls.getActivePassId();
+    if (!currentPassId) {
+      console.log('No current pass to save to');
+      return;
+    }
+
+    const currentCode = this.editor.getValue();
+    const pass = this.passes.find(p => p.id === currentPassId);
+    if (pass && pass.fragmentShader !== currentCode) {
+      console.log(`Saving shader code for pass: ${currentPassId}`);
+      console.log(`Code length: ${currentCode.length} characters`);
+      pass.fragmentShader = currentCode;
+      console.log(`Saved shader code for pass: ${currentPassId}`);
+    } else if (!pass) {
+      console.error(`Pass not found for saving: ${currentPassId}`);
+    } else {
+      console.log(`No changes to save for pass: ${currentPassId}`);
+    }
+  }
+
+  private onAddPass(_type: PassType) {
+    // Save current shader before adding new pass
+    this.saveCurrentShaderToPass();
+    
+    const bufferCount = this.passes.filter(p => p.type === 'buffer').length;
+    const bufferName = `Buffer ${String.fromCharCode(65 + bufferCount)}`; // A, B, C, D
+    
     const newPass: ShaderPass = {
-      id: `pass_${Date.now()}`,
-      name: `Pass ${(this.controls as any).passes.length + 1}`,
-      fragmentShader: ShaderCompiler.getDefaultFragmentShader(),
+      id: `buffer_${Date.now()}`,
+      name: bufferName,
+      type: 'buffer',
+      fragmentShader: this.getExampleBufferShader(),
       vertexShader: ShaderCompiler.getDefaultVertexShader(),
-      inputs: [],
-      outputs: [{
-        name: 'output',
-        format: 'rgba8unorm',
-      }],
+      channels: [
+        { index: 0, filter: 'linear', wrap: 'clamp' },
+        { index: 1, filter: 'linear', wrap: 'clamp' },
+        { index: 2, filter: 'linear', wrap: 'clamp' },
+        { index: 3, filter: 'linear', wrap: 'clamp' },
+      ],
       enabled: true,
+      renderOrder: bufferCount,
     };
 
+    this.passes.push(newPass);
     this.controls.addPass(newPass);
     this.compileAndAddPass(newPass);
+  }
+
+  private getExampleBufferShader(): string {
+    return `
+struct Uniforms {
+  time: f32,
+  resolution: vec2<f32>,
+  mouse: vec4<f32>,
+  frame: f32,
+}
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+// @group(0) @binding(1) var iChannel0: texture_2d<f32>;
+// @group(0) @binding(2) var iSampler0: sampler;
+
+@fragment
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+  // Example buffer shader - creates a moving pattern
+  let center = vec2<f32>(0.5, 0.5);
+  let dist = distance(uv, center);
+  let pattern = sin(dist * 10.0 - uniforms.time * 2.0);
+  
+  return vec4<f32>(pattern, pattern * 0.8, pattern * 0.6, 1.0);
+}`;
+  }
+
+  private onChannelUpdate(passId: string, channelIndex: number, source: string) {
+    const pass = this.passes.find(p => p.id === passId);
+    if (pass) {
+      const channel = pass.channels.find(c => c.index === channelIndex);
+      if (channel) {
+        channel.source = source || undefined;
+        // Recreate the pipeline with updated bindings
+        this.renderer.updatePassChannels(passId, pass.channels);
+        console.log(`Connected ${source} to ${passId}.iChannel${channelIndex}`);
+      }
+    }
   }
 
   private onRemovePass(passId: string) {
     this.controls.removePass(passId);
     this.renderer.removePass(passId);
-  }
-
-  private onTogglePass(passId: string, enabled: boolean) {
-    // Update pass enabled state in renderer
-    console.log(`Toggle pass ${passId}: ${enabled}`);
   }
 
   private resetShader() {

@@ -1,30 +1,37 @@
 /// <reference types="@webgpu/types" />
 
+export type PassType = 'image' | 'buffer';
+
 export interface ShaderPass {
   id: string;
   name: string;
+  type: PassType; // 'image' renders to canvas, 'buffer' creates texture
   fragmentShader: string;
   vertexShader?: string;
-  inputs: ShaderInput[];
-  outputs: ShaderOutput[];
+  channels: ShaderChannel[]; // What this pass samples from
   enabled: boolean;
+  renderOrder: number;
 }
 
-export interface ShaderInput {
-  type: 'buffer' | 'texture' | 'cubemap';
-  name: string;
-  source?: string; // Reference to another pass or external resource
+export interface ShaderChannel {
+  index: number; // 0-3 for iChannel0-3
+  source?: string; // Buffer pass ID or external resource
   filter: 'linear' | 'nearest';
   wrap: 'clamp' | 'repeat' | 'mirror';
 }
 
-export interface ShaderOutput {
-  name: string;
+export interface RenderBuffer {
+  texture: GPUTexture;
+  view: GPUTextureView;
   format: GPUTextureFormat;
-  size?: [number, number]; // If not specified, uses canvas size
+  size: [number, number];
+  passId: string; // Which pass owns this buffer
+  outputName: string; // Name of the output that created this buffer
 }
 
-export interface RenderBuffer {
+export interface BufferPass {
+  id: string;
+  name: string;
   texture: GPUTexture;
   view: GPUTextureView;
   format: GPUTextureFormat;

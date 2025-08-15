@@ -6,6 +6,8 @@ export class WebGPURenderer {
   private buffers: Map<string, RenderBuffer> = new Map();
   private passes: ShaderPass[] = [];
   private pipelines: Map<string, GPURenderPipeline> = new Map();
+  private bindGroupLayouts: Map<string, GPUBindGroupLayout> = new Map();
+  private samplers: Map<string, GPUSampler> = new Map();
   private uniformBuffer!: GPUBuffer;
   private uniformBindGroupLayout!: GPUBindGroupLayout;
   private vertexBuffer!: GPUBuffer;
@@ -18,6 +20,7 @@ export class WebGPURenderer {
     this.startTime = Date.now();
     this.setupBuffers();
     this.setupMouse();
+    this.createSamplers();
   }
 
   private setupBuffers() {
@@ -74,8 +77,45 @@ export class WebGPURenderer {
     });
   }
 
+  private createSamplers() {
+    // Create common samplers
+    this.samplers.set('linear-repeat', this.context.device.createSampler({
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'repeat',
+      addressModeV: 'repeat',
+    }));
+
+    this.samplers.set('linear-clamp', this.context.device.createSampler({
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+    }));
+
+    this.samplers.set('nearest-repeat', this.context.device.createSampler({
+      magFilter: 'nearest',
+      minFilter: 'nearest',
+      addressModeU: 'repeat',
+      addressModeV: 'repeat',
+    }));
+
+    this.samplers.set('nearest-clamp', this.context.device.createSampler({
+      magFilter: 'nearest',
+      minFilter: 'nearest',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+    }));
+  }
+
+  private getSampler(filter: string, wrap: string): GPUSampler {
+    const key = `${filter}-${wrap === 'clamp' ? 'clamp' : 'repeat'}`;
+    return this.samplers.get(key) || this.samplers.get('linear-clamp')!;
+  }
+
   async addPass(pass: ShaderPass) {
     this.passes.push(pass);
+    this.sortPassesByRenderOrder();
     this.createPassBuffers(pass);
     await this.createRenderPipeline(pass);
   }
@@ -84,26 +124,50 @@ export class WebGPURenderer {
     const index = this.passes.findIndex(p => p.id === passId);
     if (index !== -1) {
       this.passes.splice(index, 1);
-      this.buffers.delete(passId);
+      
+      // Clean up resources for this pass
       this.pipelines.delete(passId);
+      this.bindGroupLayouts.delete(passId);
+      
+      // Remove associated buffers
+      const buffersToRemove = [];
+      for (const [key, buffer] of this.buffers.entries()) {
+        if (buffer.passId === passId) {
+          buffer.texture.destroy();
+          buffersToRemove.push(key);
+        }
+      }
+      
+      for (const key of buffersToRemove) {
+        this.buffers.delete(key);
+      }
+      
+      console.log(`Removed pass: ${passId}`);
     }
   }
 
+  private sortPassesByRenderOrder() {
+    this.passes.sort((a, b) => a.renderOrder - b.renderOrder);
+  }
+
   private createPassBuffers(pass: ShaderPass) {
-    for (const output of pass.outputs) {
-      const size = output.size || [this.context.canvas.width, this.context.canvas.height];
+    // For buffer passes, create a render target texture
+    if (pass.type === 'buffer') {
+      const size = [this.context.canvas.width, this.context.canvas.height];
       const texture = WebGPUUtils.createTexture(
         this.context.device,
         size[0],
         size[1],
-        output.format
+        'rgba8unorm'
       );
 
-      this.buffers.set(`${pass.id}_${output.name}`, {
+      this.buffers.set(pass.id, {
         texture,
         view: texture.createView(),
-        format: output.format,
-        size,
+        format: 'rgba8unorm',
+        size: size as [number, number],
+        passId: pass.id,
+        outputName: 'output',
       });
     }
   }
@@ -113,12 +177,20 @@ export class WebGPURenderer {
       const vertexShader = pass.vertexShader || this.getDefaultVertexShader();
       const fragmentShader = pass.fragmentShader;
 
+      // Create bind group layout for this pass
+      const bindGroupLayout = this.createBindGroupLayoutForPass(pass);
+      this.bindGroupLayouts.set(pass.id, bindGroupLayout);
+
+      const pipelineLayout = this.context.device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout],
+      });
+
       const pipeline = WebGPUUtils.createRenderPipeline(
         this.context.device,
         vertexShader,
         fragmentShader,
-        this.context.format,
-        this.createPipelineLayout()
+        this.getPassOutputFormat(pass),
+        pipelineLayout
       );
 
       this.pipelines.set(pass.id, pipeline);
@@ -128,9 +200,85 @@ export class WebGPURenderer {
     }
   }
 
-  private createPipelineLayout(): GPUPipelineLayout {
-    return this.context.device.createPipelineLayout({
-      bindGroupLayouts: [this.uniformBindGroupLayout],
+  private createBindGroupLayoutForPass(pass: ShaderPass): GPUBindGroupLayout {
+    const entries: GPUBindGroupLayoutEntry[] = [];
+
+    // Uniforms (always binding 0)
+    entries.push({
+      binding: 0,
+      visibility: GPUShaderStage.FRAGMENT,
+      buffer: { type: 'uniform' },
+    });
+
+    // Add texture inputs for each channel that has a source
+    for (const channel of pass.channels) {
+      if (channel.source) {
+        // Texture binding (binding = channel.index * 2 + 1)
+        entries.push({
+          binding: channel.index * 2 + 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        });
+
+        // Sampler binding (binding = channel.index * 2 + 2)
+        entries.push({
+          binding: channel.index * 2 + 2,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: {},
+        });
+      }
+    }
+
+    return this.context.device.createBindGroupLayout({ entries });
+  }
+
+  private getPassOutputFormat(pass: ShaderPass): GPUTextureFormat {
+    if (pass.type === 'buffer') {
+      return 'rgba8unorm';
+    }
+    return this.context.format; // Image pass renders to canvas
+  }
+
+  private createBindGroupForPass(pass: ShaderPass): GPUBindGroup {
+    const layout = this.bindGroupLayouts.get(pass.id);
+    if (!layout) {
+      throw new Error(`No bind group layout found for pass: ${pass.id}`);
+    }
+
+    const entries: GPUBindGroupEntry[] = [];
+
+    // Uniforms (always binding 0)
+    entries.push({
+      binding: 0,
+      resource: { buffer: this.uniformBuffer },
+    });
+
+    // Add texture inputs for each channel that has a source
+    for (const channel of pass.channels) {
+      if (channel.source) {
+        const buffer = this.buffers.get(channel.source);
+        if (buffer) {
+          // Texture binding
+          entries.push({
+            binding: channel.index * 2 + 1,
+            resource: buffer.view,
+          });
+
+          // Sampler binding
+          const sampler = this.getSampler(channel.filter, channel.wrap);
+          entries.push({
+            binding: channel.index * 2 + 2,
+            resource: sampler,
+          });
+        } else {
+          console.warn(`Channel texture not found: ${channel.source} for pass ${pass.id}`);
+        }
+      }
+    }
+
+    return this.context.device.createBindGroup({
+      layout,
+      entries,
     });
   }
 
@@ -193,10 +341,9 @@ fn vs_main(@location(0) position: vec2<f32>, @location(1) uv: vec2<f32>) -> Vert
 
     const commandEncoder = this.context.device.createCommandEncoder();
 
-    // Render each pass
+    // Render passes in order
     for (const pass of this.passes) {
       if (!pass.enabled) continue;
-
       this.renderPass(commandEncoder, pass);
     }
 
@@ -205,7 +352,6 @@ fn vs_main(@location(0) position: vec2<f32>, @location(1) uv: vec2<f32>) -> Vert
   }
 
   private renderPass(commandEncoder: GPUCommandEncoder, pass: ShaderPass) {
-    // Get the render pipeline for this pass
     const pipeline = this.pipelines.get(pass.id);
     if (!pipeline) {
       console.warn(`No render pipeline found for pass: ${pass.id}`);
@@ -213,37 +359,35 @@ fn vs_main(@location(0) position: vec2<f32>, @location(1) uv: vec2<f32>) -> Vert
     }
 
     // Get render target
-    const renderTarget = pass.outputs.length > 0 
-      ? this.buffers.get(`${pass.id}_${pass.outputs[0].name}`)?.view
-      : this.context.context.getCurrentTexture().createView();
-
-    if (!renderTarget) {
-      console.warn(`No render target found for pass: ${pass.id}`);
-      return;
+    let renderTarget: GPUTextureView;
+    if (pass.type === 'buffer') {
+      const buffer = this.buffers.get(pass.id);
+      if (!buffer) {
+        console.warn(`No render target found for pass: ${pass.id}`);
+        return;
+      }
+      renderTarget = buffer.view;
+    } else {
+      // Render to canvas
+      renderTarget = this.context.context.getCurrentTexture().createView();
     }
 
     const renderPass = commandEncoder.beginRenderPass({
       colorAttachments: [{
         view: renderTarget,
         clearValue: { r: 0, g: 0, b: 0, a: 1 },
-        loadOp: 'clear',
+        loadOp: pass.type === 'buffer' ? 'clear' : 'load',
         storeOp: 'store',
       }],
     });
 
-    // Create bind group for uniforms
-    const uniformBindGroup = this.context.device.createBindGroup({
-      layout: this.uniformBindGroupLayout,
-      entries: [{
-        binding: 0,
-        resource: { buffer: this.uniformBuffer },
-      }],
-    });
+    // Create bind group with all inputs for this pass
+    const bindGroup = this.createBindGroupForPass(pass);
 
     renderPass.setPipeline(pipeline);
     renderPass.setVertexBuffer(0, this.vertexBuffer);
-    renderPass.setBindGroup(0, uniformBindGroup);
-    renderPass.draw(6); // Draw fullscreen quad
+    renderPass.setBindGroup(0, bindGroup);
+    renderPass.draw(6);
     renderPass.end();
   }
 
@@ -253,10 +397,8 @@ fn vs_main(@location(0) position: vec2<f32>, @location(1) uv: vec2<f32>) -> Vert
     
     // Recreate buffers for passes that use canvas size
     for (const pass of this.passes) {
-      for (const output of pass.outputs) {
-        if (!output.size) {
-          this.createPassBuffers(pass);
-        }
+      if (pass.type === 'buffer') {
+        this.createPassBuffers(pass);
       }
     }
   }
@@ -274,5 +416,77 @@ fn vs_main(@location(0) position: vec2<f32>, @location(1) uv: vec2<f32>) -> Vert
     }
     this.buffers.clear();
     this.pipelines.clear();
+  }
+
+  // Helper method to get available outputs for connecting to inputs
+  getAvailableOutputs(): Array<{ passId: string, outputName: string, format: GPUTextureFormat }> {
+    const outputs: Array<{ passId: string, outputName: string, format: GPUTextureFormat }> = [];
+    
+    for (const pass of this.passes) {
+      if (pass.type === 'buffer') {
+        outputs.push({
+          passId: pass.id,
+          outputName: 'output',
+          format: 'rgba8unorm',
+        });
+      }
+    }
+    
+    return outputs;
+  }
+
+  // Helper method to connect pass outputs to inputs
+  connectPassOutput(sourcePassId: string, outputName: string, targetPassId: string, channelIndex: number) {
+    const targetPass = this.passes.find(p => p.id === targetPassId);
+    if (!targetPass) {
+      console.error(`Target pass not found: ${targetPassId}`);
+      return;
+    }
+
+    const channel = targetPass.channels[channelIndex];
+    if (!channel) {
+      console.error(`Channel not found: ${channelIndex} in pass ${targetPassId}`);
+      return;
+    }
+
+    // Set the source reference
+    channel.source = sourcePassId;
+    
+    // Recreate the pipeline with updated bindings
+    this.createRenderPipeline(targetPass);
+    
+    console.log(`Connected ${sourcePassId}.${outputName} to ${targetPassId}.channel${channelIndex}`);
+  }
+
+  updatePassChannels(passId: string, channels: any[]) {
+    const pass = this.passes.find(p => p.id === passId);
+    if (!pass) {
+      console.error(`Pass not found: ${passId}`);
+      return;
+    }
+
+    // Update the pass channels
+    pass.channels = channels;
+    
+    // Recreate the pipeline with updated bindings
+    this.createRenderPipeline(pass);
+    
+    console.log(`Updated channels for pass: ${passId}`);
+  }
+
+  async updatePassShader(passId: string, fragmentShader: string) {
+    const pass = this.passes.find(p => p.id === passId);
+    if (!pass) {
+      console.error(`Pass not found: ${passId}`);
+      return;
+    }
+
+    // Update the shader code
+    pass.fragmentShader = fragmentShader;
+    
+    // Recreate the render pipeline with new shader
+    await this.createRenderPipeline(pass);
+    
+    console.log(`Updated shader for pass: ${passId}`);
   }
 }
