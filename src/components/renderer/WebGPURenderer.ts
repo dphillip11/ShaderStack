@@ -1,4 +1,5 @@
 import type { WebGPUContext, ShaderPass, RenderBuffer, ShaderUniforms } from '../../types';
+import { ShaderCompiler } from '../../utils/compiler';
 import { WebGPUUtils } from '../../utils/webgpu';
 
 export class WebGPURenderer {
@@ -9,7 +10,6 @@ export class WebGPURenderer {
   private bindGroupLayouts: Map<string, GPUBindGroupLayout> = new Map();
   private samplers: Map<string, GPUSampler> = new Map();
   private uniformBuffer!: GPUBuffer;
-  private uniformBindGroupLayout!: GPUBindGroupLayout;
   private vertexBuffer!: GPUBuffer;
   private startTime: number;
   private frame: number = 0;
@@ -174,7 +174,7 @@ export class WebGPURenderer {
 
   private async createRenderPipeline(pass: ShaderPass) {
     try {
-      const vertexShader = pass.vertexShader || await this.getDefaultVertexShader();
+      const vertexShader = pass.vertexShader || await ShaderCompiler.getDefaultVertexShader();
       const fragmentShader = pass.fragmentShader;
 
       // Create bind group layout for this pass
