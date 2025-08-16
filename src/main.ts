@@ -78,7 +78,7 @@ class WebGPUShaderApp {
       const editorContainer = document.querySelector('#editor-container') as HTMLElement;
       const controlsContainer = document.querySelector('#controls-container') as HTMLElement;
       
-      this.editor = new ShaderEditor(editorContainer, ShaderCompiler.getDefaultFragmentShader());
+      this.editor = new ShaderEditor(editorContainer, await ShaderCompiler.getDefaultFragmentShader());
       this.controls = new Controls(controlsContainer);
 
       // Set up editor
@@ -90,8 +90,8 @@ class WebGPUShaderApp {
         id: 'image',
         name: 'Image',
         type: 'image',
-        fragmentShader: ShaderCompiler.getDefaultFragmentShader(),
-        vertexShader: ShaderCompiler.getDefaultVertexShader(),
+        fragmentShader: await ShaderCompiler.getDefaultFragmentShader(),
+        vertexShader: await ShaderCompiler.getDefaultVertexShader(),
         channels: [
           { index: 0, filter: 'linear', wrap: 'clamp' },
           { index: 1, filter: 'linear', wrap: 'clamp' },
@@ -271,7 +271,7 @@ class WebGPUShaderApp {
     }
   }
 
-  private onAddPass(_type: PassType) {
+  private async onAddPass(_type: PassType) {
     // Save current shader before adding new pass
     this.saveCurrentShaderToEditingPass();
     
@@ -282,8 +282,8 @@ class WebGPUShaderApp {
       id: `buffer_${Date.now()}`,
       name: bufferName,
       type: 'buffer',
-      fragmentShader: this.getExampleBufferShader(),
-      vertexShader: ShaderCompiler.getDefaultVertexShader(),
+      fragmentShader: await this.getExampleBufferShader(),
+      vertexShader: await ShaderCompiler.getDefaultVertexShader(),
       channels: [
         { index: 0, filter: 'linear', wrap: 'clamp' },
         { index: 1, filter: 'linear', wrap: 'clamp' },
@@ -299,28 +299,8 @@ class WebGPUShaderApp {
     this.compileAndAddPass(newPass);
   }
 
-  private getExampleBufferShader(): string {
-    return `
-struct Uniforms {
-  time: f32,
-  resolution: vec2<f32>,
-  mouse: vec4<f32>,
-  frame: f32,
-}
-
-@group(0) @binding(0) var<uniform> uniforms: Uniforms;
-// @group(0) @binding(1) var iChannel0: texture_2d<f32>;
-// @group(0) @binding(2) var iSampler0: sampler;
-
-@fragment
-fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
-  // Example buffer shader - creates a moving pattern
-  let center = vec2<f32>(0.5, 0.5);
-  let dist = distance(uv, center);
-  let pattern = sin(dist * 10.0 - uniforms.time * 2.0);
-  
-  return vec4<f32>(pattern, pattern * 0.8, pattern * 0.6, 1.0);
-}`;
+  private async getExampleBufferShader(): Promise<string> {
+    return await fetch('/src/shaders/fragment.wgsl').then(response => response.text());
   }
 
   private onChannelUpdate(passId: string, channelIndex: number, source: string) {
@@ -341,8 +321,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     this.renderer.removePass(passId);
   }
 
-  private resetShader() {
-    this.editor.setValue(ShaderCompiler.getDefaultFragmentShader());
+  private async resetShader() {
+    this.editor.setValue(await ShaderCompiler.getDefaultFragmentShader());
     this.compileCurrentShader();
   }
 

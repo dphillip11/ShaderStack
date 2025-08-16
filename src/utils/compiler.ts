@@ -46,42 +46,12 @@ export class ShaderCompiler {
     }
   }
 
-  static getDefaultVertexShader(): string {
-    return `
-struct VertexOutput {
-  @builtin(position) position: vec4<f32>,
-  @location(0) uv: vec2<f32>,
-}
-
-@vertex
-fn vs_main(@location(0) position: vec2<f32>, @location(1) uv: vec2<f32>) -> VertexOutput {
-  var output: VertexOutput;
-  output.position = vec4<f32>(position, 0.0, 1.0);
-  output.uv = uv;
-  return output;
-}
-`;
+  static async getDefaultVertexShader(): Promise<string> {
+    return await fetch('/src/shaders/vertex.wgsl').then(response => response.text());
   }
 
-  static getDefaultFragmentShader(): string {
-    return `
-struct Uniforms {
-  time: f32,
-  resolution: vec2<f32>,
-  mouse: vec4<f32>,
-  frame: f32,
-}
-
-@group(0) @binding(0) var<uniform> uniforms: Uniforms;
-
-@fragment
-fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
-  // Simple animated gradient that should be visible
-  let col = 0.5 + 0.5 * cos(uniforms.time + uv.xyx + vec3<f32>(0.0, 2.0, 4.0));
-  
-  return vec4<f32>(col, 1.0);
-}
-`;
+  static async getDefaultFragmentShader(): Promise<string> {
+    return await fetch('/src/shaders/fragment.wgsl').then(response => response.text());
   }
 
   static validateWGSL(source: string): CompilationError[] {
