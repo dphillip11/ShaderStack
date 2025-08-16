@@ -16,7 +16,7 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
+  color-scheme: dark; /* Force dark mode only */
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
 
@@ -41,6 +41,11 @@ a:hover {
   color: #535bf2;
 }
 
+html {
+  background-color: var(--bg-primary);
+  height: 100%;
+}
+
 body {
   margin: 0;
   display: flex;
@@ -51,6 +56,7 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   overflow: hidden;
+  height: 100%;
 }
 
 h1 {
@@ -59,12 +65,10 @@ h1 {
 }
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
   width: 100vw;
   height: 100vh;
+  padding: 0;
+  text-align: left;
 }
 
 .logo {
@@ -105,19 +109,6 @@ button:hover {
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
 }
 
 /* Main Layout */
@@ -532,7 +523,7 @@ button:focus-visible {
 }
 
 .channels-list {
-  display: grid;
+  display: inline-flex;
   gap: 6px;
 }
 
@@ -587,7 +578,7 @@ button:focus-visible {
 .buffer-item {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-color);
-  display: flex;
+  display: inline-flex;
   justify-content: space-between;
   align-items: center;
 }
@@ -628,6 +619,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-inline: 10px;
 }
 
 .texture-placeholder {
@@ -902,32 +894,53 @@ select {
 
 /* Responsive Design */
 @media (max-width: 1200px) {
-  .shader-editor {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr auto;
-  }
-  
   .controls-panel {
     grid-column: 1 / -1;
-    max-height: 200px;
   }
 }
 
 @media (max-width: 768px) {
-  .shader-editor {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
+  body {
+    overflow: auto;
   }
   
-  .editor-panel {
-    order: 2;
+  .shader-editor {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    height: auto;
+    min-height: 100vh;
   }
   
   .preview-panel {
+    grid-column: 1;
+    grid-row: 1;
     order: 1;
+    height: 400px;
+    min-height: 400px;
+  }
+  
+  .editor-panel {
+    grid-column: 1;
+    grid-row: 2;
+    order: 2;
+    height: 500px;
+    min-height: 500px;
   }
   
   .controls-panel {
+    grid-column: 1;
+    grid-row: 3;
     order: 3;
+    height: auto;
+    max-height: none;
+    min-height: 300px;
   }
+  
+  .resize-handle {
+    display: none;
+  }
+}
+
+.controls-panel {
+  max-height: 800px;
 }

@@ -31,7 +31,6 @@ export class Controls {
         
         <div id="active-pass-info" class="active-pass-info">
           <div class="pass-channels">
-            <h4>Input Channels</h4>
             <div id="channels-list" class="channels-list">
               <div class="channel-item">
                 <label>iChannel0: <select class="channel-select" data-channel="0">
@@ -56,19 +55,7 @@ export class Controls {
             </div>
           </div>
         </div>
-        
-        <div class="controls-section">
-          <h4>Available Buffers</h4>
-          <div id="buffer-preview" class="buffer-preview">
-            <div class="no-buffers">No buffer passes created</div>
-          </div>
-        </div>
-        
-        <div class="controls-section">
-          <h4>Compilation Errors</h4>
-          <div id="error-list" class="error-list"></div>
-        </div>
-        
+
         <div class="controls-section">
           <h4>Render Settings</h4>
           <label>
@@ -82,6 +69,18 @@ export class Controls {
               <option value="1920x1080">1920x1080</option>
             </select>
           </label>
+        </div>
+        
+        <div class="controls-section">
+          <h4>Available Buffers</h4>
+          <div id="buffer-preview" class="buffer-preview">
+            <div class="no-buffers">No buffer passes created</div>
+          </div>
+        </div>
+        
+        <div class="controls-section">
+          <h4>Compilation Errors</h4>
+          <div id="error-list" class="error-list"></div>
         </div>
       </div>
     `;
