@@ -1,0 +1,53 @@
+{
+  "users": [
+    {
+      "id": "df2ad57005a105372d51c3407d9afd2f",
+      "username": "Daniel",
+      "createdAt": "2025-08-16T10:48:27.207737Z"
+    },
+    {
+      "id": "65c74558a6256aaf6b7b40669c4e9ef6",
+      "username": "NewUser",
+      "createdAt": "2025-08-16T10:52:05.207558Z"
+    }
+  ],
+  "shaders": [
+    {
+      "id": "39fb6127f943c2959d1b23ecd3a0a0d2",
+      "ownerId": "df2ad57005a105372d51c3407d9afd2f",
+      "title": "First Shader",
+      "code": "Some code",
+      "tags": [
+        "an obviously working shader"
+      ],
+      "createdAt": "2025-08-16T10:51:05.573394Z",
+      "updatedAt": "2025-08-16T10:51:41.525197Z"
+    },
+    {
+      "id": "e68f0226b0e739ae667c4845b465ab85",
+      "ownerId": "65c74558a6256aaf6b7b40669c4e9ef6",
+      "title": "SHADER 2",
+      "code": "// WGSL shader code here\nWJLSL:AK",
+      "tags": [
+        "shader"
+      ],
+      "createdAt": "2025-08-16T10:53:21.209251Z",
+      "updatedAt": "2025-08-16T10:53:21.209251Z"
+    },
+    {
+      "id": "9a438d2ad82c53a7510bcb0746397332",
+      "ownerId": "65c74558a6256aaf6b7b40669c4e9ef6",
+      "title": "SLA:FKD",
+      "code": "// WGSL shader code here\nslakd;",
+      "tags": [
+        "shader"
+      ],
+      "createdAt": "2025-08-16T10:53:28.176811Z",
+      "updatedAt": "2025-08-16T10:53:28.176811Z"
+    }
+  ],
+  "tags": {
+    "an obviously working shader": 1,
+    "shader": 2
+  }
+}

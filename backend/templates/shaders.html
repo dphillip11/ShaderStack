@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Browse Shaders</title>
+<style>
+body { font-family: system-ui, sans-serif; margin:40px; }
+header a { margin-right:1rem; }
+.grid { display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); }
+.card { border:1px solid #ccc; padding:0.75rem; border-radius:6px; background:#fafafa; }
+.tags span { font-size:.75rem; background:#eee; padding:2px 6px; margin:2px; display:inline-block; border-radius:3px; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/shaders">Browse</a>
+  <a href="/my">My Shaders</a>
+  <a href="/login">Login</a>
+</header>
+<h1>Shaders</h1>
+<form method="get" action="/shaders" style="margin-bottom:1rem;">
+  <input type="text" name="q" placeholder="Search title, code, tags" value="{{.Query}}" style="width:260px;" />
+  <button type="submit">Search</button>
+</form>
+<p>{{.Total}} result(s){{if .Query}} for "{{.Query}}"{{end}}</p>
+<div class="grid">
+{{range .Shaders}}
+  <div class="card">
+    <h3>{{.Title}}</h3>
+    <div class="tags">{{range .Tags}}<span>{{.}}</span>{{end}}</div>
+    <pre style="white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto;">{{.Code}}</pre>
+    <small>Created: {{.CreatedAt}}</small>
+  </div>
+{{else}}
+  <p>No shaders found.</p>
+{{end}}
+</div>
+{{if gt .Pages 1}}
+<nav style="margin-top:1.5rem;">
+  {{if gt .Page 0}}<a href="/shaders?q={{.Query}}&page={{sub .Page 1}}">Prev</a>{{end}}
+  {{range $i := until .Pages}}
+    {{if eq $i $.Page}}<strong>{{$i}}</strong>{{else}}<a href="/shaders?q={{$.Query}}&page={{$i}}">{{$i}}</a>{{end}}
+  {{end}}
+  {{if lt (add .Page 1) .Pages}}<a href="/shaders?q={{.Query}}&page={{add .Page 1}}">Next</a>{{end}}
+</nav>
+{{end}}
+<script>
+// helpers for template functions not available; generating page links client-side if missing
+</script>
+</body>
+</html>
