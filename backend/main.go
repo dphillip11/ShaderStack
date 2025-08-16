@@ -67,18 +67,20 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	// Simple CORS
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS")
-			if req.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			next.ServeHTTP(w, req)
-		})
+	// Remove CORS for consolidated deployment (same origin)
+	
+	// Serve built frontend assets from local dist/assets directory
+	assetDir := "dist/assets"
+	log.Printf("serving assets from %s", assetDir)
+	r.Handle("/assets/*", http.StripPrefix("/assets/", http.FileServer(http.Dir(assetDir))))
+
+	// Root loads editor SPA via Go template (consolidated)
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		if err := tmpl.ExecuteTemplate(w, "editor.html", nil); err != nil {
+			log.Printf("template error: %v", err)
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte("template error"))
+		}
 	})
 
 	// Page routes

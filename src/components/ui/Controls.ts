@@ -7,7 +7,6 @@ export class Controls {
   private onPassSelectCallback?: (passId: string) => void;
   private onPassAddCallback?: (type: PassType) => void;
   private onPassRemoveCallback?: (passId: string) => void;
-  private onPassToggleCallback?: (passId: string, enabled: boolean) => void;
   private onChannelUpdateCallback?: (passId: string, channelIndex: number, source: string) => void;
 
   constructor(container: HTMLElement) {
@@ -322,10 +321,6 @@ export class Controls {
 
   onPassRemove(callback: (passId: string) => void) {
     this.onPassRemoveCallback = callback;
-  }
-
-  onPassToggle(callback: (passId: string, enabled: boolean) => void) {
-    this.onPassToggleCallback = callback;
   }
 
   onPassAdd(callback: (type: PassType) => void) {

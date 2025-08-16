@@ -169,8 +169,4 @@ export class ShaderEditor {
   highlightErrors(errors: CompilationError[]) {
     this.updateErrors(errors);
   }
-
-  private clearErrorHighlights() {
-    // Placeholder for clearing error highlights
-  }
 }

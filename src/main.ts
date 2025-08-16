@@ -5,6 +5,7 @@ import { WebGPURenderer } from './components/renderer/WebGPURenderer';
 import { ShaderEditor } from './components/editor/ShaderEditor';
 import { Controls } from './components/ui/Controls';
 import type { ShaderPass, WebGPUContext, PassType } from './types';
+import { BackendClient, type BackendShader } from './utils/backend';
 
 class WebGPUShaderApp {
   private canvas!: HTMLCanvasElement;
@@ -17,6 +18,10 @@ class WebGPUShaderApp {
   private compileTimeout: number = 0;
   private passes: ShaderPass[] = [];
   private currentEditingPassId: string | null = null; // Track which pass is currently being edited
+  private backend = new BackendClient();
+  private currentBackendShaderId: string | null = null;
+  private browseOverlay: HTMLElement | null = null;
+  private browseState = { q: '', page: 0, limit: 20, total: 0, loading: false };
 
   constructor() {
     this.setupHTML();
@@ -29,7 +34,9 @@ class WebGPUShaderApp {
         <div class="editor-panel">
           <div class="editor-header">
             <h2>Fragment Shader</h2>
-            <div class="editor-controls">
+            <div class="editor-controls backend-actions">
+              <button id="open-backend-btn" class="btn btn-secondary" title="Browse online shaders">Browse</button>
+              <button id="save-backend-btn" class="btn btn-primary" title="Save to backend">Save</button>
               <button id="compile-btn" class="btn btn-primary">Compile</button>
               <button id="reset-btn" class="btn btn-secondary">Reset</button>
             </div>
@@ -164,6 +171,9 @@ class WebGPUShaderApp {
     document.querySelector('#pause-btn')?.addEventListener('click', () => {
       this.stopRenderLoop();
     });
+
+    document.querySelector('#open-backend-btn')?.addEventListener('click', () => this.openBrowseOverlay());
+    document.querySelector('#save-backend-btn')?.addEventListener('click', () => this.saveCurrentShaderToBackend());
 
     // Handle window resize
     window.addEventListener('resize', () => {
@@ -419,6 +429,133 @@ class WebGPUShaderApp {
     document.addEventListener('selectstart', (e) => {
       if (isResizing) e.preventDefault();
     });
+  }
+
+  // Backend integration methods
+  private openBrowseOverlay() {
+    if (this.browseOverlay) { this.browseOverlay.remove(); }
+    this.browseState.page = 0;
+    this.browseOverlay = document.createElement('div');
+    this.browseOverlay.className = 'backend-overlay';
+    this.browseOverlay.innerHTML = `
+      <div class="backend-dialog">
+        <header>
+          <h3>Browse Shaders</h3>
+          <div class="search-bar">
+            <input type="text" id="backend-search-input" placeholder="Search..." value="${this.browseState.q}" />
+            <button id="backend-search-btn" class="btn btn-primary btn-sm">Search</button>
+            <button id="backend-close-btn" class="btn btn-secondary btn-sm close-btn">Close</button>
+          </div>
+        </header>
+        <div id="backend-results" class="backend-results"></div>
+        <div class="backend-pagination">
+          <div>
+            <button id="backend-prev" class="btn btn-secondary btn-sm">Prev</button>
+            <button id="backend-next" class="btn btn-secondary btn-sm">Next</button>
+          </div>
+          <div class="inline-info" id="backend-page-info"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(this.browseOverlay);
+
+    const input = this.browseOverlay.querySelector<HTMLInputElement>('#backend-search-input')!;
+    const search = () => { this.browseState.q = input.value.trim(); this.browseState.page = 0; this.fetchBrowsePage(); };
+    let debounce: number = 0;
+    input.addEventListener('input', () => { clearTimeout(debounce); debounce = window.setTimeout(search, 400); });
+    this.browseOverlay.querySelector('#backend-search-btn')!.addEventListener('click', search);
+    this.browseOverlay.querySelector('#backend-close-btn')!.addEventListener('click', () => this.browseOverlay?.remove());
+    this.browseOverlay.querySelector('#backend-prev')!.addEventListener('click', () => { if (this.browseState.page>0){ this.browseState.page--; this.fetchBrowsePage(); }});
+    this.browseOverlay.querySelector('#backend-next')!.addEventListener('click', () => { const maxPage = Math.max(0, Math.ceil(this.browseState.total/ this.browseState.limit)-1); if (this.browseState.page < maxPage){ this.browseState.page++; this.fetchBrowsePage(); }});
+
+    this.fetchBrowsePage();
+  }
+
+  private async fetchBrowsePage() {
+    if (!this.browseOverlay) return;
+    const resultsEl = this.browseOverlay.querySelector('#backend-results')! as HTMLElement;
+    const pageInfo = this.browseOverlay.querySelector('#backend-page-info')! as HTMLElement;
+    try {
+      this.browseState.loading = true;
+      resultsEl.innerHTML = '<div class="inline-info">Loading...</div>';
+      const offset = this.browseState.page * this.browseState.limit;
+      const res = await this.backend.listShaders(this.browseState.q, this.browseState.limit, offset);
+      this.browseState.total = res.total;
+      this.renderBrowseResults(resultsEl, res.items);
+      const maxPage = Math.max(0, Math.ceil(res.total / res.limit) - 1);
+      pageInfo.textContent = `Page ${this.browseState.page+1} of ${maxPage+1} • ${res.total} total`;
+    } catch (e:any) {
+      resultsEl.innerHTML = `<div class="inline-info" style="color:#dc3545">Error: ${e.message}</div>`;
+    } finally { this.browseState.loading = false; }
+  }
+
+  private renderBrowseResults(container: HTMLElement, items: BackendShader[]) {
+    if (!items.length) { container.innerHTML = '<div class="inline-info">No shaders found.</div>'; return; }
+    container.innerHTML = items.map(sh => `
+      <div class="shader-card" data-id="${sh.id}">
+        <h4 title="${sh.title}">${sh.title}</h4>
+        <div class="tags">${sh.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+        <pre>${this.escapeHTML(sh.code.substring(0, 400))}${sh.code.length>400?'...':''}</pre>
+        <button class="btn btn-primary btn-sm" data-action="load" data-id="${sh.id}">Load</button>
+      </div>`).join('');
+    container.querySelectorAll<HTMLButtonElement>('button[data-action="load"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id!;
+        const shader = await this.backend.getShader(id);
+        this.loadShaderFromBackend(shader);
+        this.browseOverlay?.remove();
+      });
+    });
+  }
+
+  private escapeHTML(s: string) { return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c] as string)); }
+
+  private loadShaderFromBackend(shader: BackendShader) {
+    // For now map backend shader to the single image pass (or currently selected pass)
+    this.saveCurrentShaderToEditingPass();
+    const activePassId = this.controls.getActivePassId() || 'image';
+    const pass = this.passes.find(p => p.id === activePassId);
+    if (pass) {
+      pass.fragmentShader = shader.code;
+      this.editor.setValue(shader.code);
+      this.currentBackendShaderId = shader.id;
+      (document.querySelector('#save-backend-btn') as HTMLButtonElement).textContent = 'Update';
+      this.compileCurrentShader();
+    }
+  }
+
+  private async saveCurrentShaderToBackend() {
+    const code = this.editor.getValue();
+    let title = '';
+    if (this.currentBackendShaderId) {
+      // Update
+      try {
+        title = prompt('Update title (leave blank to keep existing):', '') || '';
+        const patch: any = { code };
+        if (title.trim()) patch.title = title.trim();
+        const updated = await this.backend.updateShader(this.currentBackendShaderId, patch);
+        this.currentBackendShaderId = updated.id;
+        console.log('Updated shader', updated.id);
+      } catch (e:any) {
+        alert('Update failed: '+ e.message);
+      }
+      return;
+    }
+    // Create new
+    title = prompt('Enter shader title:', 'Untitled Shader') || 'Untitled Shader';
+    const tagStr = prompt('Enter tags (comma separated):', '') || '';
+    const tags = tagStr.split(',').map(t=>t.trim()).filter(Boolean);
+    try {
+      const created = await this.backend.createShader(title, code, tags);
+      this.currentBackendShaderId = created.id;
+      (document.querySelector('#save-backend-btn') as HTMLButtonElement).textContent = 'Update';
+      console.log('Created shader', created.id);
+    } catch (e:any) {
+      if (e.message === 'auth') {
+        alert('You must be logged in (use /login page in backend)');
+      } else {
+        alert('Save failed: '+ e.message);
+      }
+    }
   }
 }
 

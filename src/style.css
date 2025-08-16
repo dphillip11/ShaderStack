@@ -944,3 +944,134 @@ select {
 .controls-panel {
   max-height: 800px;
 }
+
+/* Backend Integration Overlay */
+.backend-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.backend-dialog {
+  width: 800px;
+  max-width: 90%;
+  max-height: 80%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+
+.backend-dialog header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.backend-dialog header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+}
+
+.backend-dialog .close-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+}
+
+.backend-dialog .search-bar {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.backend-dialog input[type=text] {
+  flex: 1;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.backend-results {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.shader-card {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shader-card h4 {
+  margin: 0;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shader-card pre {
+  font-size: 10px;
+  max-height: 120px;
+  overflow: auto;
+  background: var(--bg-primary);
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.shader-card .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.shader-card .tag {
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  font-size: 10px;
+  border-radius: 3px;
+}
+
+.backend-pagination {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-color);
+  justify-content: space-between;
+  align-items: center;
+}
+
+.backend-pagination button {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.inline-info {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.editor-header .backend-actions {
+  display: flex;
+  gap: 8px;
+}

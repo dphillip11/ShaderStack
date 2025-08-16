@@ -47,7 +47,7 @@ export class WebGPURenderer {
     });
 
     // Create bind group layout for uniforms
-    this.uniformBindGroupLayout = WebGPUUtils.createBindGroupLayout(
+    const uniformBindGroupLayout = WebGPUUtils.createBindGroupLayout(
       this.context.device,
       [
         {
@@ -57,6 +57,7 @@ export class WebGPURenderer {
         },
       ]
     );
+    this.bindGroupLayouts.set('uniform', uniformBindGroupLayout);
   }
 
   private setupMouse() {
