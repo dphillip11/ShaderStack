@@ -44,10 +44,22 @@
       ],
       "createdAt": "2025-08-16T10:53:28.176811Z",
       "updatedAt": "2025-08-16T10:53:28.176811Z"
+    },
+    {
+      "id": "b28b08b377b293b925cbe0fa35a63fa9",
+      "ownerId": "65c74558a6256aaf6b7b40669c4e9ef6",
+      "title": "Spiral",
+      "code": "\nstruct Uniforms {\n  time: f32,\n  resolution: vec2\u003cf32\u003e,\n  mouse: vec4\u003cf32\u003e,\n  frame: f32,\n}\n\n@group(0) @binding(0) var\u003cuniform\u003e uniforms: Uniforms;\n\n@fragment\nfn fs_main(@location(0) uv: vec2\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {  \n  // Animated rainbow spiral\n  let center =vec2\u003cf32\u003e(0.5);\n  let pos = uv - center;\n  let dist = length(pos);\n  let angle = atan2(pos.y, pos.x);\n  \n  let spiral = sin(dist - uniforms.time * 2.0 + angle * 15.0) * 0.5 + 0.5;\n  let rainbow = 0.5 + 0.5 * cos(uniforms.time + uv.xyx + vec3\u003cf32\u003e(0.0, 2.0, 4.0));\n  \n  let col = mix(rainbow, vec3\u003cf32\u003e(spiral), 0.3);\n  \n  return vec4\u003cf32\u003e(col, 1.0);\n}\n",
+      "tags": [
+        "basic"
+      ],
+      "createdAt": "2025-08-16T11:05:35.822531Z",
+      "updatedAt": "2025-08-16T11:05:35.822531Z"
     }
   ],
   "tags": {
     "an obviously working shader": 1,
+    "basic": 1,
     "shader": 2
   }
 }
