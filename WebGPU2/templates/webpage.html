@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - WebGPU Shader Hub</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="/" class="brand-link">
+                    <i class="fas fa-cube"></i>
+                    WebGPU Shaders
+                </a>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="/" class="nav-link {{if eq .Page "browse"}}active{{end}}">
+                    <i class="fas fa-search"></i> Browse
+                </a>
+                {{if .AuthInfo.IsAuthenticated}}
+                <a href="/my" class="nav-link {{if eq .Page "my"}}active{{end}}">
+                    <i class="fas fa-user"></i> My Shaders
+                </a>
+                <a href="/new" class="nav-link {{if eq .Page "editor"}}active{{end}}">
+                    <i class="fas fa-plus"></i> New Shader
+                </a>
+                {{end}}
+            </nav>
+            
+            <div class="nav-auth">
+                {{if .AuthInfo.IsAuthenticated}}
+                <div class="user-menu">
+                    <span class="username">
+                        <i class="fas fa-user-circle"></i> {{.AuthInfo.Username}}
+                    </span>
+                    <form action="/api/logout" method="post" style="display: inline;">
+                        <button type="submit" class="btn-secondary logout-btn">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                    </form>
+                </div>
+                {{else}}
+                <div class="auth-buttons">
+                    <button id="login-btn" class="btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        {{template "Content" .}}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 WebGPU Shader Hub. Explore and share WebGPU shaders.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script src="/static/js/search.js"></script>
+    <script src="/static/js/app.js"></script>
+
+    <!-- Login Modal -->
+    {{ template "login.html" . }}
+</body>
+</html>
