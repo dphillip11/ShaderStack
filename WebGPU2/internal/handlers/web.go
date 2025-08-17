@@ -11,6 +11,40 @@ import (
     "log"
 )
 
+var tmpl *template.Template
+
+func InitTemplates() {
+    tmpl, _ = template.ParseGlob("templates/{layouts,components}/*.html")
+    for _, t := range tmpl.Templates() {
+        log.Println("Loaded template:", t.Name())
+    }
+}
+
+func loadPage(w http.ResponseWriter, pageFile string, templateToExecute string, data interface{}) {
+    // Clone the base template so we can safely add page-specific definitions
+    pageTemplate, err := baseTemplates.Clone()
+    if err != nil {
+        http.Error(w, "Template error", http.StatusInternalServerError)
+        log.Printf("Template clone error: %v", err)
+        return
+    }
+
+    // Parse the specific page file into the cloned template
+    _, err = pageTemplate.ParseFiles("templates/pages/" + pageFile)
+    if err != nil {
+        http.Error(w, "Template parsing error", http.StatusInternalServerError)
+        log.Printf("Page template error: %v", err)
+        return
+    }
+
+    // Render the desired template (likely "base.html")
+    err = pageTemplate.ExecuteTemplate(w, templateToExecute, data)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        log.Printf("Execution error: %v", err)
+    }
+}
+
 // Helper function to get authentication info from request
 func getAuthInfo(r *http.Request) models.AuthenticationInfo {
     // Check for session cookie
@@ -64,22 +98,7 @@ func RenderBrowse(w http.ResponseWriter, r *http.Request) {
         SearchQuery: params,
     }
 
-    tmpl , err := template.ParseFiles(
-        "templates/layouts/base.html",
-        "templates/components/login.html", 
-        "templates/components/search.html",
-        "templates/pages/browse.html",
-    )
-    if err != nil {
-        http.Error(w, "Error loading templates", http.StatusInternalServerError)
-        log.Printf("Template error: %v", err)
-        return
-    }
-
-    if err := tmpl.Execute(w, data); err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+    loadPage(w, "browse.html", data);
 }
 
 func RenderMy(w http.ResponseWriter, r *http.Request) {
@@ -103,26 +122,7 @@ func RenderMy(w http.ResponseWriter, r *http.Request) {
         SearchQuery: params,
     }
 
-    tmpl , err := template.ParseFiles(
-        "templates/layouts/base.html",
-        "templates/components/login.html", 
-        "templates/components/search.html",
-        "templates/pages/browse.html",
-    )
-
-    if err != nil {
-        http.Error(w, "Error loading templates", http.StatusInternalServerError)
-        log.Printf("Template error: %v", err)
-        return
-    }
-
-    var buf bytes.Buffer
-    err = tmpl.Execute(&buf, data)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    buf.WriteTo(w)
+    loadPage(w, "browse.html", data)
 }
 
 func RenderEditor(w http.ResponseWriter, r *http.Request) {
@@ -158,22 +158,7 @@ func RenderEditor(w http.ResponseWriter, r *http.Request) {
         Author:   author,
     }
 
-    tmpl , err := template.ParseFiles(
-        "templates/layouts/base.html", 
-        "templates/components/login.html",
-        "templates/components/shader_properties.html",
-        "templates/pages/editor.html")
-        
-    if err != nil {
-        http.Error(w, "Error loading templates", http.StatusInternalServerError)
-        log.Printf("Template error: %v", err)
-        return
-    }
-
-    if err = tmpl.Execute(w, data); err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+    loadPage(w, "editor.html", data);
 }
 
 func RenderSplitWindow(w http.ResponseWriter, r *http.Request) {    
@@ -184,15 +169,6 @@ func RenderSplitWindow(w http.ResponseWriter, r *http.Request) {
         RightContent: template.HTML("<p>This is the right panel</p>"),
     }
 
-    tmpl , err := template.ParseFiles("templates/layouts/base.html","templates/components/login.html",  "templates/pages/split_window.html")
-    if err != nil {
-        http.Error(w, "Error loading templates", http.StatusInternalServerError)
-        log.Printf("Template error: %v", err)
-        return
-    }
 
-    if err = tmpl.Execute(w, data); err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+    loadPage(w, "split_window.html", data);
 }

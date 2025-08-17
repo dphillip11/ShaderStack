@@ -13,6 +13,8 @@ func main() {
     r := mux.NewRouter()
     fmt.Println("Router created...")
 
+    handlers.InitTemplates()
+
     // Authentication routes
     r.HandleFunc("/api/login", handlers.Login).Methods("POST")
     r.HandleFunc("/api/logout", handlers.Logout).Methods("POST")
