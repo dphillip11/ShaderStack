@@ -7,22 +7,33 @@ import (
     "github.com/gorilla/mux"
     "go-server/internal/models"
     "go-server/internal/data"
-    "bytes"
     "log"
 )
 
 var tmpl *template.Template
 
 func InitTemplates() {
-    tmpl, _ = template.ParseGlob("templates/{layouts,components}/*.html")
-    for _, t := range tmpl.Templates() {
-        log.Println("Loaded template:", t.Name())
+    var err error
+    tmpl, err = template.ParseGlob("templates/layouts/*.html")
+    if err != nil {
+        log.Fatalf("Failed to parse layouts templates: %v", err)
     }
+
+    tmpl, err = tmpl.ParseGlob("templates/components/*.html")
+    if err != nil {
+        log.Fatalf("Failed to parse components templates: %v", err)
+    }
+
+    for _, t := range tmpl.Templates() {
+        log.Println("Loaded base template:", t.Name())
+    }
+
+    tmpl = tmpl.Funcs(templateFuncMap())
 }
 
-func loadPage(w http.ResponseWriter, pageFile string, templateToExecute string, data interface{}) {
+func loadPage(w http.ResponseWriter, pageFile string, data interface{}) {
     // Clone the base template so we can safely add page-specific definitions
-    pageTemplate, err := baseTemplates.Clone()
+    pageTemplate, err := tmpl.Clone()
     if err != nil {
         http.Error(w, "Template error", http.StatusInternalServerError)
         log.Printf("Template clone error: %v", err)
@@ -38,7 +49,7 @@ func loadPage(w http.ResponseWriter, pageFile string, templateToExecute string, 
     }
 
     // Render the desired template (likely "base.html")
-    err = pageTemplate.ExecuteTemplate(w, templateToExecute, data)
+    err = pageTemplate.ExecuteTemplate(w, "base.html", data)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         log.Printf("Execution error: %v", err)

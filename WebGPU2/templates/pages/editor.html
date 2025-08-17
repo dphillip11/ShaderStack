@@ -142,4 +142,14 @@
         ]
     };
     </script>
-    {{ end }}
+
+    <h2>Two Split Views</h2>
+
+    <div style="width: 100%; height: 300px;">
+        {{ template "split_window.html" (dict "Left" "<p>Left A</p>" "Right" "<p>Right B</p>" "Vertical" false) }}
+    </div>
+    <hr/>
+    <div style="width: 100%; height: 300px;">
+        {{ template "split_window.html" (dict "Left" "<p>Left C</p>" "Right" "<p>Right D</p>" "Vertical" true) }}
+    </div>
+{{ end }}
