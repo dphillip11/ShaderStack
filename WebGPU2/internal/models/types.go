@@ -1,5 +1,7 @@
 package models
 
+import "html/template"
+
 type User struct {
     ID       int    `json:"id"`
     Username string `json:"username"`
@@ -60,4 +62,11 @@ type EditorPageData struct {
     AuthInfo        AuthenticationInfo
     Shader          Shader
     Author          string
+}
+
+type SplitWindowData struct {
+    AuthInfo        AuthenticationInfo
+    Vertical     bool
+    LeftContent  template.HTML
+    RightContent template.HTML
 }

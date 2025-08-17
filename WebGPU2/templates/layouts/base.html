@@ -1,13 +1,13 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - WebGPU Shader Hub</title>
+    <title>{{block "Title" .}}{{ end }} - WebGPU Shader Hub</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="icon" href="data:,">
-</head>
+    </head>
 <body>
     <header class="navbar">
         <div class="nav-container">
@@ -19,14 +19,14 @@
             </div>
             
             <nav class="nav-menu">
-                <a href="/" class="nav-link {{if eq .Page "browse"}}active{{end}}">
+                <a href="/" class="nav-link">
                     <i class="fas fa-search"></i> Browse
                 </a>
                 {{if .AuthInfo.IsAuthenticated}}
-                <a href="/my" class="nav-link {{if eq .Page "my"}}active{{end}}">
+                <a href="/my" class="nav-link">
                     <i class="fas fa-user"></i> My Shaders
                 </a>
-                <a href="/new" class="nav-link {{if eq .Page "editor"}}active{{end}}">
+                <a href="/new" class="nav-link">
                     <i class="fas fa-plus"></i> New Shader
                 </a>
                 {{end}}
@@ -56,7 +56,7 @@
     </header>
 
     <main class="main-content">
-        {{template "Content" .}}
+        {{block "Content" .}}{{ end }}
     </main>
 
     <footer class="footer">

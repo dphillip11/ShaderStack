@@ -149,6 +149,14 @@ func GetShaders(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(shaders)
 }
 
+func GetTags(w http.ResponseWriter, r *http.Request) {
+    repo := data.GetRepository()
+    tags := repo.GetAllTags()
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(tags)
+}
+
 func GetShader(w http.ResponseWriter, r *http.Request) {
     vars := mux.Vars(r)
     id, err := strconv.Atoi(vars["id"])

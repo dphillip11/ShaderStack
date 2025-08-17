@@ -1,0 +1,22 @@
+
+    {{define "Title"}}
+        Split Window Example
+    {{end}}
+
+    {{define "Content"}}
+    <link rel="stylesheet" href="/static/css/split_window.css">
+    <div class="container" style="height:200px; width:200px; border:1px solid black;">
+        <div class="split-window {{ if .Vertical }}vertical{{ else }}horizontal{{ end }}" data-controller="split-window">
+            <div class="split-window-pane left" data-pane="left">
+                {{ .LeftContent }}
+            </div>
+            <div class="resize-handle" data-resize-handle>
+                <div class="resize-line"></div>
+            </div>
+            <div class="split-window-pane right" data-pane="right">
+                {{ .RightContent }}
+            </div>
+        </div>
+    </div>
+    <script src="/static/js/split_window.js"></script>
+    {{end}}

@@ -1,0 +1,50 @@
+.split-window {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+}
+
+.split-window.horizontal {
+    flex-direction: row;
+}
+
+.split-window.vertical {
+    flex-direction: column;
+}
+
+.split-window-pane {
+    flex-grow: 1;
+    overflow: auto;
+}
+
+.resize-handle {
+    background: transparent;
+    z-index: 10;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.split-window.horizontal .resize-handle {
+    width: 6px;
+    cursor: col-resize;
+}
+
+.split-window.vertical .resize-handle {
+    height: 6px;
+    cursor: row-resize;
+}
+
+.resize-line {
+    background: #aaa;
+    width: 2px;
+    height: 100%;
+}
+
+.split-window.vertical .resize-line {
+    height: 2px;
+    width: 100%;
+}

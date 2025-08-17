@@ -1,0 +1,145 @@
+
+    {{ define "Title" }}
+        Shader Editor
+    {{ end }}
+
+    {{ define "Content" }}
+    <div class="editor-page">
+        <div class="editor-header">
+            <div class="shader-info">
+                <h1 class="shader-title">{{if .Shader.Name}}{{.Shader.Name}}{{else}}New Shader{{end}}</h1>
+                {{if .Author}}<p class="shader-author">by {{.Author}}</p>{{end}}
+            </div>
+            <div class="editor-actions">
+                {{if .Shader.ID}}
+                <button id="save-shader" class="btn-primary">
+                    <i class="fas fa-save"></i> Save
+                </button>
+                {{else}}
+                <button id="create-shader" class="btn-primary">
+                    <i class="fas fa-plus"></i> Create Shader
+                </button>
+                {{end}}
+                <button id="run-shader" class="btn-secondary">
+                    <i class="fas fa-play"></i> Run
+                </button>
+            </div>
+        </div>
+
+        <div class="editor-layout">
+            <!-- Sidebar for properties -->
+            <div class="editor-sidebar">
+                {{template "shader_properties.html" .}}
+            </div>
+
+            <!-- Main editor area with resizable panels -->
+            <div class="editor-main-container">
+                <div class="resizable-layout">
+                    <!-- Code Editor Panel -->
+                    <div class="code-panel">
+                        <div class="panel-header">
+                            <h3>Code Editor</h3>
+                            <div class="code-tabs">
+                                {{range $index, $script := .Shader.ShaderScripts}}
+                                <button class="tab-btn {{if eq $index 0}}active{{end}}" data-target="editor-{{$index}}">
+                                    Script {{$index}}
+                                    <span class="tab-close" data-tab="{{$index}}">×</span>
+                                </button>
+                                {{else}}
+                                <button class="tab-btn active" data-target="editor-0">
+                                    Fragment Shader
+                                    <span class="tab-close" data-tab="0">×</span>
+                                </button>
+                                {{end}}
+                                <button class="tab-btn add-tab" id="add-script" title="Add new script">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="code-editor-container">
+                            {{range $index, $script := .Shader.ShaderScripts}}
+                            <div class="code-editor-wrapper {{if eq $index 0}}active{{end}}" id="wrapper-{{$index}}">
+                                <textarea id="editor-{{$index}}" 
+                                        class="shader-code" 
+                                        data-script-id="{{$script.ID}}"
+                                        placeholder="Enter your WGSL shader code here...">{{$script.Code}}</textarea>
+                            </div>
+                            {{else}}
+                            <div class="code-editor-wrapper active" id="wrapper-0">
+                                <textarea id="editor-0" 
+                                        class="shader-code" 
+                                        placeholder="@fragment
+    fn main() -> @location(0) vec4<f32> {
+        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }"></textarea>
+                            </div>
+                            {{end}}
+                        </div>
+                    </div>
+
+                    <!-- Resizer handle (only visible on large screens) -->
+                    <div class="resize-handle">
+                        <div class="resize-line"></div>
+                    </div>
+
+                    <!-- Preview Panel -->
+                    <div class="preview-panel">
+                        <div class="panel-header">
+                            <h3>Preview</h3>
+                            <div class="preview-controls">
+                                <button class="btn-icon" id="compile-shader" title="Compile shader">
+                                    <i class="fas fa-cogs"></i>
+                                </button>
+                                <button class="btn-icon" id="fullscreen-preview" title="Fullscreen preview">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="preview-content">
+                            <canvas id="webgpu-canvas" width="400" height="400"></canvas>
+                            
+                            <!-- Console/Error panel -->
+                            <div class="console-panel">
+                                <div class="console-header">
+                                    <span class="console-title">Console</span>
+                                    <button class="btn-icon" id="clear-console" title="Clear console">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                                <div id="shader-errors" class="console-content"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Pass shader data to JavaScript
+    window.shaderData = {
+        id: {{if .Shader.ID}}{{.Shader.ID}}{{else}}null{{end}},
+        name: "{{if .Shader.Name}}{{.Shader.Name}}{{else}}New Shader{{end}}",
+        scripts: [
+            {{range .Shader.ShaderScripts}}
+            {
+                id: {{.ID}},
+                code: {{.Code | printf "%q"}}
+            },
+            {{else}}
+            {
+                id: null,
+                code: "@fragment\nfn main() -> @location(0) vec4<f32> {\n    return vec4<f32>(1.0, 0.0, 0.0, 1.0);\n}"
+            },
+            {{end}}
+        ],
+        tags: [
+            {{range .Shader.Tags}}
+            "{{.Name}}",
+            {{end}}
+        ]
+    };
+    </script>
+    {{ end }}

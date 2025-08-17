@@ -7,15 +7,9 @@ import (
     "github.com/gorilla/mux"
     "go-server/internal/models"
     "go-server/internal/data"
+    "bytes"
+    "log"
 )
-
-const browsePath = "templates/browse.html"
-const editorPath = "templates/editor.html"
-const webpagePath = "templates/webpage.html"
-const loginPath = "templates/login.html"
-const shaderPropertiesPath = "templates/shader_properties.html"
-const searchPath = "templates/search.html"
-
 
 // Helper function to get authentication info from request
 func getAuthInfo(r *http.Request) models.AuthenticationInfo {
@@ -63,30 +57,26 @@ func RenderBrowse(w http.ResponseWriter, r *http.Request) {
 
     shaders := data.GetRepository().SearchShaders(params)
     authInfo := getAuthInfo(r)
-    
-    // Parse templates
-    tmpl, err := template.ParseFiles(webpagePath, browsePath, loginPath,searchPath)
+
+    data := models.BrowsePageData{
+        Shaders:     shaders,
+        AuthInfo:    authInfo,
+        SearchQuery: params,
+    }
+
+    tmpl , err := template.ParseFiles(
+        "templates/layouts/base.html",
+        "templates/components/login.html", 
+        "templates/components/search.html",
+        "templates/pages/browse.html",
+    )
     if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
+        http.Error(w, "Error loading templates", http.StatusInternalServerError)
+        log.Printf("Template error: %v", err)
         return
     }
 
-    // Create browse page data using new types
-    pageData := struct {
-        Title string
-        Page  string
-        models.BrowsePageData
-    }{
-        Title: "Browse Shaders",
-        Page:  "browse",
-        BrowsePageData: models.BrowsePageData{
-            Shaders:     shaders,
-            AuthInfo:    authInfo,
-            SearchQuery: params,
-        },
-    }
-
-    if err := tmpl.Execute(w, pageData); err != nil {
+    if err := tmpl.Execute(w, data); err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
@@ -105,33 +95,34 @@ func RenderMy(w http.ResponseWriter, r *http.Request) {
     params.Tags = r.URL.Query()["tags"]
 
     shaders := data.GetRepository().SearchShaders(params)
-    
-    // Parse templates
-    tmpl, err := template.ParseFiles(webpagePath, browsePath, loginPath, searchPath)
+
+    // Create browse page data for "My Shaders" - fix structure to match template
+    data := models.BrowsePageData{
+        Shaders:     shaders,
+        AuthInfo:    authInfo,
+        SearchQuery: params,
+    }
+
+    tmpl , err := template.ParseFiles(
+        "templates/layouts/base.html",
+        "templates/components/login.html", 
+        "templates/components/search.html",
+        "templates/pages/browse.html",
+    )
+
+    if err != nil {
+        http.Error(w, "Error loading templates", http.StatusInternalServerError)
+        log.Printf("Template error: %v", err)
+        return
+    }
+
+    var buf bytes.Buffer
+    err = tmpl.Execute(&buf, data)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
-
-    // Create browse page data for "My Shaders" - fix structure to match template
-    pageData := struct {
-        Title string
-        Page  string
-        models.BrowsePageData
-    }{
-        Title: "My Shaders",
-        Page:  "my",
-        BrowsePageData: models.BrowsePageData{
-            Shaders:     shaders,
-            AuthInfo:    authInfo,
-            SearchQuery: params,
-        },
-    }
-
-    if err := tmpl.Execute(w, pageData); err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+    buf.WriteTo(w)
 }
 
 func RenderEditor(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +133,6 @@ func RenderEditor(w http.ResponseWriter, r *http.Request) {
     
     var shader models.Shader
     var author string
-    title := "New Shader"
     
     if id != "" && id != "new" {
         shaderID, err := strconv.Atoi(id)
@@ -154,37 +144,54 @@ func RenderEditor(w http.ResponseWriter, r *http.Request) {
         shaderPtr := data.GetRepository().GetShaderByID(shaderID)
         if shaderPtr != nil {
             shader = *shaderPtr
-            title = shader.Name
             user := data.GetRepository().GetUserByID(shader.UserID)
             if user != nil {
                 author = user.Username
             }
         }
     }
-    
-    // Parse templates
-    tmpl, err := template.ParseFiles(webpagePath, editorPath, loginPath, shaderPropertiesPath)
+
+    // Create editor page data using new types
+    data := models.EditorPageData{
+        AuthInfo: authInfo,
+        Shader:   shader,
+        Author:   author,
+    }
+
+    tmpl , err := template.ParseFiles(
+        "templates/layouts/base.html", 
+        "templates/components/login.html",
+        "templates/components/shader_properties.html",
+        "templates/pages/editor.html")
+        
     if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
+        http.Error(w, "Error loading templates", http.StatusInternalServerError)
+        log.Printf("Template error: %v", err)
         return
     }
 
-    // Create editor page data using new types
-    pageData := struct {
-        Title string
-        Page  string
-        models.EditorPageData
-    }{
-        Title: title,
-        Page:  "editor",
-        EditorPageData: models.EditorPageData{
-            AuthInfo: authInfo,
-            Shader:   shader,
-            Author:   author,
-        },
+    if err = tmpl.Execute(w, data); err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+}
+
+func RenderSplitWindow(w http.ResponseWriter, r *http.Request) {    
+    data := models.SplitWindowData{
+        AuthInfo:      getAuthInfo(r),
+        Vertical:     false,
+        LeftContent:  template.HTML("<p>This is the left panel</p>"),
+        RightContent: template.HTML("<p>This is the right panel</p>"),
     }
 
-    if err := tmpl.Execute(w, pageData); err != nil {
+    tmpl , err := template.ParseFiles("templates/layouts/base.html","templates/components/login.html",  "templates/pages/split_window.html")
+    if err != nil {
+        http.Error(w, "Error loading templates", http.StatusInternalServerError)
+        log.Printf("Template error: %v", err)
+        return
+    }
+
+    if err = tmpl.Execute(w, data); err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
