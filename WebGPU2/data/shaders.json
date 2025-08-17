@@ -1,5 +1,55 @@
 [
   {
+    "id": 4,
+    "user_id": 3,
+    "name": "Procedural Noisiest",
+    "shader_scripts": [
+      {
+        "id": 4,
+        "code": "fn hash(p: vec2\u003cf32\u003e) -\u003e f32 {\n    let p3 = fract(vec3\u003cf32\u003e(p.xyx) * 0.13);\n    let p3_dot = dot(p3, vec3\u003cf32\u003e(p3.yzx) + 3.333);\n    return fract((p3.x + p3.y) * p3_dot);\n}\n\nfn noise(p: vec2\u003cf32\u003e) -\u003e f32 {\n    let i = floor(p);\n    let f = fract(p);\n    let u = f * f * (3.0 - 2.0 * f);\n    return mix(mix(hash(i + vec2\u003cf32\u003e(0.0, 0.0)), hash(i + vec2\u003cf32\u003e(1.0, 0.0)), u.x),\n               mix(hash(i + vec2\u003cf32\u003e(0.0, 1.0)), hash(i + vec2\u003cf32\u003e(1.0, 1.0)), u.x), u.y);\n}\n\n@fragment\nfn main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / 800.0;\n    let n = noise(uv * 8.0);\n    return vec4\u003cf32\u003e(n, n, n, 1.0);\n}"
+      }
+    ],
+    "tags": [
+      {
+        "id": 1,
+        "name": "fragment"
+      },
+      {
+        "id": 2,
+        "name": "procedural"
+      },
+      {
+        "id": 3,
+        "name": "texture"
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "user_id": 4,
+    "name": "Basic Lighting Model",
+    "shader_scripts": [
+      {
+        "id": 5,
+        "code": "struct VertexInput {\n    @location(0) position: vec3\u003cf32\u003e,\n    @location(1) normal: vec3\u003cf32\u003e,\n};\n\nstruct VertexOutput {\n    @builtin(position) clip_position: vec4\u003cf32\u003e,\n    @location(0) world_normal: vec3\u003cf32\u003e,\n};\n\n@vertex\nfn vs_main(input: VertexInput) -\u003e VertexOutput {\n    var out: VertexOutput;\n    out.clip_position = vec4\u003cf32\u003e(input.position, 1.0);\n    out.world_normal = input.normal;\n    return out;\n}\n\n@fragment\nfn fs_main(input: VertexOutput) -\u003e @location(0) vec4\u003cf32\u003e {\n    let light_dir = normalize(vec3\u003cf32\u003e(1.0, 1.0, 1.0));\n    let normal = normalize(input.world_normal);\n    let diffuse = max(dot(normal, light_dir), 0.0);\n    let color = vec3\u003cf32\u003e(0.8, 0.6, 0.4) * diffuse;\n    return vec4\u003cf32\u003e(color, 1.0);\n}"
+      }
+    ],
+    "tags": [
+      {
+        "id": 1,
+        "name": "fragment"
+      },
+      {
+        "id": 2,
+        "name": "vertex"
+      },
+      {
+        "id": 7,
+        "name": "lighting"
+      }
+    ]
+  },
+  {
     "id": 6,
     "user_id": 1,
     "name": "Compute Particle System",
@@ -50,6 +100,27 @@
     ]
   },
   {
+    "id": 3,
+    "user_id": 1,
+    "name": "Animated Color Wave",
+    "shader_scripts": [
+      {
+        "id": 3,
+        "code": "struct Uniforms {\n    time: f32,\n};\n\n@group(0) @binding(0) var\u003cuniform\u003e uniforms: Uniforms;\n\n@fragment\nfn main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / 800.0;\n    let r = sin(uniforms.time + uv.x * 3.14159) * 0.5 + 0.5;\n    let g = cos(uniforms.time + uv.y * 3.14159) * 0.5 + 0.5;\n    let b = sin(uniforms.time * 2.0) * 0.5 + 0.5;\n    return vec4\u003cf32\u003e(r, g, b, 1.0);\n}"
+      }
+    ],
+    "tags": [
+      {
+        "id": 1,
+        "name": "fragment"
+      },
+      {
+        "id": 5,
+        "name": "animation"
+      }
+    ]
+  },
+  {
     "id": 1,
     "user_id": 1,
     "name": "Basic Red Fragment",
@@ -86,82 +157,11 @@
   {
     "id": 8,
     "user_id": 3,
-    "name": "New Shading",
+    "name": "New Shade",
     "shader_scripts": [
       {
         "id": 1,
         "code": ""
-      }
-    ]
-  },
-  {
-    "id": 3,
-    "user_id": 1,
-    "name": "Animated Color Wave",
-    "shader_scripts": [
-      {
-        "id": 3,
-        "code": "struct Uniforms {\n    time: f32,\n};\n\n@group(0) @binding(0) var\u003cuniform\u003e uniforms: Uniforms;\n\n@fragment\nfn main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / 800.0;\n    let r = sin(uniforms.time + uv.x * 3.14159) * 0.5 + 0.5;\n    let g = cos(uniforms.time + uv.y * 3.14159) * 0.5 + 0.5;\n    let b = sin(uniforms.time * 2.0) * 0.5 + 0.5;\n    return vec4\u003cf32\u003e(r, g, b, 1.0);\n}"
-      }
-    ],
-    "tags": [
-      {
-        "id": 1,
-        "name": "fragment"
-      },
-      {
-        "id": 5,
-        "name": "animation"
-      }
-    ]
-  },
-  {
-    "id": 4,
-    "user_id": 3,
-    "name": "Procedural Noisiest",
-    "shader_scripts": [
-      {
-        "id": 4,
-        "code": "fn hash(p: vec2\u003cf32\u003e) -\u003e f32 {\n    let p3 = fract(vec3\u003cf32\u003e(p.xyx) * 0.13);\n    let p3_dot = dot(p3, vec3\u003cf32\u003e(p3.yzx) + 3.333);\n    return fract((p3.x + p3.y) * p3_dot);\n}\n\nfn noise(p: vec2\u003cf32\u003e) -\u003e f32 {\n    let i = floor(p);\n    let f = fract(p);\n    let u = f * f * (3.0 - 2.0 * f);\n    return mix(mix(hash(i + vec2\u003cf32\u003e(0.0, 0.0)), hash(i + vec2\u003cf32\u003e(1.0, 0.0)), u.x),\n               mix(hash(i + vec2\u003cf32\u003e(0.0, 1.0)), hash(i + vec2\u003cf32\u003e(1.0, 1.0)), u.x), u.y);\n}\n\n@fragment\nfn main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / 800.0;\n    let n = noise(uv * 8.0);\n    return vec4\u003cf32\u003e(n, n, n, 1.0);\n}"
-      }
-    ],
-    "tags": [
-      {
-        "id": 1,
-        "name": "fragment"
-      },
-      {
-        "id": 2,
-        "name": "procedural"
-      },
-      {
-        "id": 3,
-        "name": "texture"
-      }
-    ]
-  },
-  {
-    "id": 5,
-    "user_id": 4,
-    "name": "Basic Lighting Model",
-    "shader_scripts": [
-      {
-        "id": 5,
-        "code": "struct VertexInput {\n    @location(0) position: vec3\u003cf32\u003e,\n    @location(1) normal: vec3\u003cf32\u003e,\n};\n\nstruct VertexOutput {\n    @builtin(position) clip_position: vec4\u003cf32\u003e,\n    @location(0) world_normal: vec3\u003cf32\u003e,\n};\n\n@vertex\nfn vs_main(input: VertexInput) -\u003e VertexOutput {\n    var out: VertexOutput;\n    out.clip_position = vec4\u003cf32\u003e(input.position, 1.0);\n    out.world_normal = input.normal;\n    return out;\n}\n\n@fragment\nfn fs_main(input: VertexOutput) -\u003e @location(0) vec4\u003cf32\u003e {\n    let light_dir = normalize(vec3\u003cf32\u003e(1.0, 1.0, 1.0));\n    let normal = normalize(input.world_normal);\n    let diffuse = max(dot(normal, light_dir), 0.0);\n    let color = vec3\u003cf32\u003e(0.8, 0.6, 0.4) * diffuse;\n    return vec4\u003cf32\u003e(color, 1.0);\n}"
-      }
-    ],
-    "tags": [
-      {
-        "id": 1,
-        "name": "fragment"
-      },
-      {
-        "id": 2,
-        "name": "vertex"
-      },
-      {
-        "id": 7,
-        "name": "lighting"
       }
     ]
   }

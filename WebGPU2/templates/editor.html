@@ -23,27 +23,7 @@
 
     <div class="editor-container">
         <div class="editor-sidebar">
-            <div class="shader-properties">
-                <h3>Shader Properties</h3>
-                
-                <div class="property-group">
-                    <label for="shader-name">Name</label>
-                    <input type="text" id="shader-name" value="{{if .Shader.Name}}{{.Shader.Name}}{{else}}New Shader{{end}}">
-                </div>
-
-                <div class="property-group">
-                    <label for="tag-input">Tags</label>
-                    <input type="text" id="tag-input" placeholder="Add tag...">
-                    <div id="current-tags" class="tags-container">
-                        {{range .Shader.Tags}}
-                        <span class="tag">
-                            {{.Name}}
-                            <button type="button" class="remove-tag" onclick="removeTag(this)">×</button>
-                        </span>
-                        {{end}}
-                    </div>
-                </div>
-            </div>
+            {{template "shader_properties" .}}
         </div>
 
         <div class="editor-main">

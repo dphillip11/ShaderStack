@@ -13,6 +13,7 @@ const browsePath = "templates/browse.html"
 const editorPath = "templates/editor.html"
 const webpagePath = "templates/webpage.html"
 const loginPath = "templates/login.html"
+const shaderPropertiesPath = "templates/shader_properties.html"
 
 // Helper function to get authentication info from request
 func getAuthInfo(r *http.Request) models.AuthenticationInfo {
@@ -160,7 +161,7 @@ func RenderEditor(w http.ResponseWriter, r *http.Request) {
     }
     
     // Parse templates
-    tmpl, err := template.ParseFiles(webpagePath, editorPath, loginPath)
+    tmpl, err := template.ParseFiles(webpagePath, editorPath, loginPath, shaderPropertiesPath)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return

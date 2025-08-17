@@ -1,0 +1,59 @@
+{{ define "shader_properties" }}
+<div class="shader-properties-component" data-shader-id="{{.Shader.ID}}">
+    <h3>Shader Properties</h3>
+    
+    <div class="property-group">
+        <label for="shader-name">Name</label>
+        <input type="text" 
+               id="shader-name" 
+               class="shader-name-input"
+               value="{{if .Shader.Name}}{{.Shader.Name}}{{else}}New Shader{{end}}"
+               placeholder="Enter shader name...">
+        <div class="input-feedback" id="name-feedback"></div>
+    </div>
+
+    <div class="property-group">
+        <label for="tag-input">Tags</label>
+        <div class="tag-input-container">
+            <input type="text" 
+                   id="tag-input" 
+                   class="tag-input"
+                   placeholder="Add tag..."
+                   autocomplete="off">
+            <button type="button" class="add-tag-btn" id="add-tag-btn">
+                <i class="fas fa-plus"></i>
+            </button>
+        </div>
+        <div id="current-tags" class="tags-container">
+            {{range .Shader.Tags}}
+            <span class="tag" data-tag-name="{{.Name}}">
+                {{.Name}}
+                <button type="button" class="remove-tag" data-tag="{{.Name}}">×</button>
+            </span>
+            {{end}}
+        </div>
+        <div class="tag-suggestions" id="tag-suggestions"></div>
+    </div>
+
+    <div class="property-group">
+        <label>Status</label>
+        <div class="property-status">
+            <span class="status-indicator" id="save-status">
+                <i class="fas fa-circle"></i>
+                <span class="status-text">Saved</span>
+            </span>
+        </div>
+    </div>
+
+    <div class="property-actions">
+        <button type="button" class="btn-save" id="save-properties">
+            <i class="fas fa-save"></i> Save Properties
+        </button>
+        {{if .Shader.ID}}
+        <button type="button" class="btn-revert" id="revert-properties">
+            <i class="fas fa-undo"></i> Revert
+        </button>
+        {{end}}
+    </div>
+</div>
+{{ end }}

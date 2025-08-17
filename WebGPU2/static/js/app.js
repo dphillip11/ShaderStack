@@ -52,16 +52,6 @@ function setupShaderActions() {
         saveBtn.addEventListener('click', saveShader);
         console.log('Save button event listener attached');
     }
-    
-    if (createBtn) {
-        createBtn.addEventListener('click', function(e) {
-            console.log('Create button clicked!');
-            createShader();
-        });
-        console.log('Create button event listener attached');
-    } else {
-        console.error('Create button with ID "create-shader" not found in DOM');
-    }
 }
 
 // Delete shader function
