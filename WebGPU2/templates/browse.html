@@ -12,37 +12,7 @@
     </div>
 
     <!-- Search Component -->
-    <div id="search-component" class="search-component">
-        <div class="search-filters">
-            <form id="search-form" class="search-bar" method="GET">
-                <input type="text" 
-                       id="search-input" 
-                       name="name" 
-                       placeholder="Search shaders..." 
-                       value="{{.SearchQuery.Name}}">
-                <button type="submit" class="btn-primary">
-                    <i class="fas fa-search"></i> Search
-                </button>
-                <button type="button" id="clear-search" class="btn-secondary">
-                    <i class="fas fa-times"></i> Clear
-                </button>
-            </form>
-            
-            <div class="filter-section">
-                <label>Filter by tags:</label>
-                <div class="tag-filters" id="tag-filters">
-                    <!-- Tags will be populated by JavaScript -->
-                </div>
-            </div>
-
-            <div class="search-results-info">
-                <span id="results-count">{{len .Shaders}} shader{{if ne (len .Shaders) 1}}s{{end}} found</span>
-                <button id="clear-all-filters" class="btn-link" style="{{if not (or .SearchQuery.Name .SearchQuery.Tags)}}display: none;{{end}}">
-                    <i class="fas fa-filter"></i> Clear all filters
-                </button>
-            </div>
-        </div>
-    </div>
+    {{template "search.html" .}}
 
     <div class="shader-grid" id="shader-grid">
         {{range .Shaders}}

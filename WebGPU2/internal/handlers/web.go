@@ -14,6 +14,8 @@ const editorPath = "templates/editor.html"
 const webpagePath = "templates/webpage.html"
 const loginPath = "templates/login.html"
 const shaderPropertiesPath = "templates/shader_properties.html"
+const searchPath = "templates/search.html"
+
 
 // Helper function to get authentication info from request
 func getAuthInfo(r *http.Request) models.AuthenticationInfo {
@@ -63,7 +65,7 @@ func RenderBrowse(w http.ResponseWriter, r *http.Request) {
     authInfo := getAuthInfo(r)
     
     // Parse templates
-    tmpl, err := template.ParseFiles(webpagePath, browsePath, loginPath)
+    tmpl, err := template.ParseFiles(webpagePath, browsePath, loginPath,searchPath)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
@@ -105,13 +107,13 @@ func RenderMy(w http.ResponseWriter, r *http.Request) {
     shaders := data.GetRepository().SearchShaders(params)
     
     // Parse templates
-    tmpl, err := template.ParseFiles(webpagePath, browsePath, loginPath)
+    tmpl, err := template.ParseFiles(webpagePath, browsePath, loginPath, searchPath)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
 
-    // Create browse page data for "My Shaders"
+    // Create browse page data for "My Shaders" - fix structure to match template
     pageData := struct {
         Title string
         Page  string
