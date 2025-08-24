@@ -47,6 +47,24 @@ export function replaceAllScripts(list) {
   editorState.update(s => ({ ...s, scripts: list, activeScriptId: list[0]?.id ?? null }));
 }
 
+export function deleteScript(id) {
+  editorState.update(s => {
+    const newScripts = s.scripts.filter(sc => sc.id !== id);
+    
+    // If we're deleting the active script, switch to another one
+    let newActiveId = s.activeScriptId;
+    if (s.activeScriptId === id) {
+      newActiveId = newScripts.length > 0 ? newScripts[0].id : null;
+    }
+    
+    return {
+      ...s,
+      scripts: newScripts,
+      activeScriptId: newActiveId
+    };
+  });
+}
+
 export function setShader(shader) {
   editorState.update(s => ({ ...s, shader }));
 }

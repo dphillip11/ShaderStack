@@ -1,5 +1,5 @@
 <script>
-  import { editorState, setActiveScript, updateScriptBuffer } from '../../stores/editor.js';
+  import { editorState, setActiveScript, updateScriptBuffer, deleteScript } from '../../stores/editor.js';
   import { addScript } from '../../adapters/workspaceAdapter.js';
   import BufferControls from './BufferControls.svelte';
   
@@ -18,6 +18,17 @@
     }
   }
   
+  function deleteScriptHandler(scriptId, event) {
+    event.stopPropagation(); // Prevent tab selection when clicking X
+    
+    // Don't allow deleting the last script
+    if (scripts.length <= 1) {
+      return;
+    }
+    
+    deleteScript(scriptId);
+  }
+  
   import { onDestroy } from 'svelte';
   onDestroy(unsubscribe);
 </script>
@@ -25,10 +36,22 @@
 <div class="script-tabs-container">
   <div class="script-tabs">
     {#each scripts as sc}
-      <button class="tab-btn {active===sc.id ? 'active':''}" on:click={() => select(sc.id)}>
-        Script {sc.id}
-        <span class="buffer-indicator">{sc.buffer?.width || 512}×{sc.buffer?.height || 512}</span>
-      </button>
+      <div class="tab-wrapper">
+        <button class="tab-btn {active===sc.id ? 'active':''}" on:click={() => select(sc.id)}>
+          <span class="tab-content">
+            Script {sc.id}
+            <span class="buffer-indicator">{sc.buffer?.width || 512}×{sc.buffer?.height || 512}</span>
+          </span>
+          {#if scripts.length > 1}
+            <button 
+              class="tab-close" 
+              on:click={(e) => deleteScriptHandler(sc.id, e)}
+              title="Delete script"
+              aria-label="Delete script {sc.id}"
+            >×</button>
+          {/if}
+        </button>
+      </div>
     {/each}
     <button class="tab-btn add" on:click={add} title="Add script">+</button>
   </div>
@@ -54,6 +77,10 @@
     padding: 1rem 1.5rem 0.5rem 1.5rem;
   }
 
+  .tab-wrapper {
+    position: relative;
+  }
+
   .tab-btn {
     background: none;
     border: none;
@@ -64,16 +91,51 @@
     transition: all 0.3s;
     position: relative;
     display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    min-width: 0;
+  }
+
+  .tab-content {
+    display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.25rem;
-    font-size: 0.9rem;
   }
 
   .tab-btn.active,
   .tab-btn:hover {
     background-color: #667eea;
     color: white;
+  }
+
+  .tab-close {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.2rem;
+    border-radius: 3px;
+    opacity: 0.6;
+    transition: all 0.2s;
+    margin-left: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+  }
+
+  .tab-close:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .tab-btn.active .tab-close:hover {
+    background-color: rgba(255, 255, 255, 0.3);
   }
 
   .buffer-indicator {
@@ -107,6 +169,12 @@
     
     .buffer-indicator {
       font-size: 0.6rem;
+    }
+    
+    .tab-close {
+      width: 16px;
+      height: 16px;
+      font-size: 1rem;
     }
   }
 </style>

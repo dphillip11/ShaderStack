@@ -28,6 +28,17 @@ export async function initWorkspace() {
       }));
     }
     
+    // Function to ensure script has valid code
+    function ensureValidCode(script) {
+      if (!script.code || typeof script.code !== 'string' || script.code.trim() === '') {
+        return {
+          ...script,
+          code: "@fragment\nfn main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {\n    let uv = fragCoord.xy / vec2<f32>(512.0, 512.0);\n    return vec4<f32>(uv, 0.5, 1.0);\n}"
+        };
+      }
+      return script;
+    }
+    
     if (shaderData && shaderData.id) {
       // Ensure shader_scripts is valid array
       if (!shaderData.shader_scripts || !Array.isArray(shaderData.shader_scripts)) {
@@ -39,11 +50,13 @@ export async function initWorkspace() {
         }];
       }
       
-      // Decode JSON-encoded code strings and convert numeric IDs to strings
-      shaderData.shader_scripts = decodeCodeStrings(shaderData.shader_scripts).map(script => ({
-        ...script,
-        id: String(script.id)
-      }));
+      // Decode JSON-encoded code strings, ensure valid code, and convert numeric IDs to strings
+      shaderData.shader_scripts = decodeCodeStrings(shaderData.shader_scripts)
+        .map(ensureValidCode)
+        .map(script => ({
+          ...script,
+          id: String(script.id)
+        }));
       
       await ws.loadShader(shaderData);
       setShader({ id: shaderData.id, name: shaderData.name, tags: shaderData.tags || [] });
@@ -86,11 +99,15 @@ export async function saveShader() {
     setSaving(true);
     const s = getSnapshot();
     s.scripts.forEach(sc => ws.updateScriptCode(sc.id, sc.code));
-    // Build full payload
+    // Build full payload with proper data types for Go backend
     const payload = {
       id: s.shader?.id,
       name: s.shader?.name || 'Untitled Shader',
-      shader_scripts: s.scripts.map(sc => ({ id: sc.id, code: sc.code, buffer: sc.buffer })),
+      shader_scripts: s.scripts.map(sc => ({ 
+        id: parseInt(sc.id, 10), // Convert string ID back to integer
+        code: sc.code, 
+        buffer: sc.buffer 
+      })),
       tags: (s.shader?.tags || []).map(t => typeof t === 'string' ? { name: t } : t)
     };
     // Direct save via workspace (fallback) or API if needed
@@ -126,9 +143,13 @@ export async function compileActive() {
 
 export function addScript() {
   const ws = getWorkspace(); if (!ws) return;
-  ws.addScript('').then(id => {
+  
+  // Provide default shader code instead of empty string
+  const defaultCode = "@fragment\nfn main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {\n    let uv = fragCoord.xy / vec2<f32>(512.0, 512.0);\n    return vec4<f32>(uv, 0.25, 1.0);\n}";
+  
+  ws.addScript(defaultCode).then(id => {
     const currentScripts = getSnapshot().scripts;
-    const newScript = { id, code: '', buffer: { format: 'rgba8unorm', width:512, height:512 } };
+    const newScript = { id, code: defaultCode, buffer: { format: 'rgba8unorm', width:512, height:512 } };
     replaceAllScripts([...currentScripts, newScript]);
     setActiveScript(id);
     console.log('addScript completed, set active script to:', id);
