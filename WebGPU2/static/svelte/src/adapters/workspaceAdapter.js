@@ -93,6 +93,27 @@ export async function runAll() {
   } finally { setRunning(false); }
 }
 
+export async function runActiveScript() {
+  const ws = getWorkspace();
+  if (!ws) return;
+  try {
+    setRunning(true);
+    const s = getSnapshot();
+    const activeScript = s.scripts.find(sc => sc.id === s.activeScriptId);
+    if (!activeScript) {
+      addConsoleMessage('No active script to run', 'warning');
+      return;
+    }
+    
+    // Update the script code before running
+    ws.updateScriptCode(activeScript.id, activeScript.code);
+    await ws.runScript(activeScript.id);
+    addConsoleMessage(`Script ${activeScript.id} executed successfully`, 'success');
+  } catch (e) {
+    addConsoleMessage('Script execution failed: ' + e.message, 'error');
+  } finally { setRunning(false); }
+}
+
 export async function saveShader() {
   const ws = getWorkspace(); if (!ws) return;
   try {

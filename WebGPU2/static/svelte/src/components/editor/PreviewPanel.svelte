@@ -1,14 +1,99 @@
 <script>
   import { editorState } from '../../stores/editor.js';
-  const state = editorState;
+  import { onMount, onDestroy } from 'svelte';
+  
+  let workspace = null;
+  let lastActiveScriptId = null;
+  let unsubscribe;
+  
+  // Subscribe to editor state to watch for active script changes
+  unsubscribe = editorState.subscribe(state => {
+    // When active script changes, update the preview to show that script's output
+    if (state.activeScriptId !== lastActiveScriptId) {
+      updatePreviewForActiveScript(state.activeScriptId);
+      lastActiveScriptId = state.activeScriptId;
+    }
+  });
+  
+  // Get workspace reference
+  function getWorkspace() {
+    return window.__workspaceRef;
+  }
+  
+  // Update preview to show the active script's buffer output
+  function updatePreviewForActiveScript(scriptId) {
+    const currentWorkspace = getWorkspace();
+    
+    if (currentWorkspace && scriptId) {
+      console.log('Updating preview to show script:', scriptId);
+      try {
+        // Show the buffer output for the specified script in the preview canvas
+        currentWorkspace.showBufferVisualization(scriptId, 'texture');
+      } catch (error) {
+        console.warn('Failed to update preview for script', scriptId, ':', error);
+      }
+    }
+  }
+  
+  onMount(() => {
+    workspace = getWorkspace();
+    
+    // Listen for script execution events
+    if (workspace && workspace.scriptEngine) {
+      const handleAllScriptsExecuted = () => {
+        // After all scripts run, show the active script's output in the preview
+        const currentState = $editorState;
+        if (currentState.activeScriptId) {
+          setTimeout(() => updatePreviewForActiveScript(currentState.activeScriptId), 100);
+        }
+      };
+      
+      workspace.scriptEngine.addEventListener('allScriptsExecuted', handleAllScriptsExecuted);
+      
+      // Initial preview update
+      const currentState = $editorState;
+      if (currentState.activeScriptId) {
+        updatePreviewForActiveScript(currentState.activeScriptId);
+      }
+      
+      // Store cleanup function
+      return () => {
+        if (workspace && workspace.scriptEngine) {
+          workspace.scriptEngine.removeEventListener('allScriptsExecuted', handleAllScriptsExecuted);
+        }
+      };
+    }
+  });
+  
+  onDestroy(() => {
+    if (unsubscribe) {
+      unsubscribe();
+    }
+  });
 </script>
 
 <div class="preview-panel">
   <div class="panel-header">
     <h3>Preview</h3>
-    <div class="preview-status">{#if $state.running}Running…{/if}</div>
+    <div class="preview-info">
+      {#if $editorState.activeScriptId}
+        <span class="active-script">Script {$editorState.activeScriptId}</span>
+      {/if}
+      <div class="preview-status">
+        {#if $editorState.running}Running…{/if}
+      </div>
+    </div>
   </div>
-  <canvas id="webgpu-canvas" width="400" height="400" aria-label="WebGPU preview"></canvas>
+  <div class="preview-content">
+    <div class="webgpu-canvas-container">
+      <canvas id="webgpu-canvas" width="400" height="400" aria-label="WebGPU preview"></canvas>
+      {#if !$editorState.activeScriptId}
+        <div id="canvas-overlay">
+          <div>No script selected</div>
+        </div>
+      {/if}
+    </div>
+  </div>
 </div>
 
 <style>
@@ -37,24 +122,24 @@
     font-size: 1.1rem;
   }
 
-  .preview-controls {
+  .preview-info {
     display: flex;
-    gap: 0.5rem;
+    align-items: center;
+    gap: 1rem;
   }
 
-  .btn-icon {
-    background: none;
-    border: none;
-    padding: 0.5rem;
-    border-radius: 5px;
-    cursor: pointer;
-    color: #718096;
-    transition: all 0.3s;
+  .active-script {
+    font-size: 0.8rem;
+    color: #667eea;
+    font-weight: 600;
+    background: #edf2f7;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
   }
 
-  .btn-icon:hover {
-    background-color: #e2e8f0;
-    color: #2d3748;
+  .preview-status {
+    font-size: 0.8rem;
+    color: #4a5568;
   }
 
   .preview-content {
@@ -90,6 +175,7 @@
     background-color: rgba(26, 32, 44, 0.9);
     color: white;
     text-align: center;
+    font-size: 0.9rem;
   }
 
   @media (max-width: 1024px) {
