@@ -1,62 +1,60 @@
-# Go Server
+# WebGPU Shader Hub
 
-This project is a basic Go server that demonstrates how to set up API and web routes. It includes handlers for both types of routes and serves a simple HTML page.
+Modernized Go + Svelte application for browsing and editing WebGPU (WGSL) shaders.
 
-## Project Structure
+## Current Architecture
+- Backend: Go HTTP server (mux) serving API + HTML templates.
+- Frontend: Svelte 5 single-page segments mounted into base layout (#svelte-root).
+  - Browse page: dynamic search/filter (replaces legacy search.js).
+  - Editor page: Svelte editor (replaces legacy editor inline logic / app.js) using legacy WebGPU core modules via an adapter.
+- Legacy engine modules retained: webgpu-core.js, shader-compiler.js, buffer-manager.js, script-engine.js, visualization-engine.js, shader-workspace.js.
+- Adapter layer: static/svelte/src/adapters/workspaceAdapter.js bridges legacy ShaderWorkspace to Svelte stores.
 
+## Migration Status
+Removed from layout:
+- static/js/app.js
+- static/js/search.js
+- inline editor initialization logic
+
+Still present (kept for incremental migration, not loaded by pages):
+- shader_properties.js
+- split_window.js
+- state-manager.js
+- ui-manager.js
+- shader-crud*.js
+
+## Building Frontend
 ```
-go-server
-├── cmd
-│   └── server
-│       └── main.go        # Entry point of the application
-├── internal
-│   ├── handlers
-│   │   ├── api.go        # API route handlers
-│   │   └── web.go        # Web route handlers
-│   └── models
-│       └── types.go      # Data structures used in the application
-├── static
-│   ├── css
-│   │   └── style.css      # CSS styles for the web application
-│   └── js
-│       └── app.js         # JavaScript code for client-side functionality
-├── templates
-│   └── index.html         # HTML template served by the web handler
-├── go.mod                 # Module definition and dependencies
-├── go.sum                 # Checksums for module dependencies
-└── README.md              # Project documentation
+cd static/svelte
+npm install
+npm run build   # outputs to static/svelte/dist
 ```
+The built bundle is referenced at /static/svelte/dist/assets/app.js.
 
-## Setup Instructions
+For dev hot-reload (separate port 5173):
+```
+npm run dev
+```
+(Adjust server / template if you want to load from dev origin instead of built assets.)
 
-1. **Clone the repository:**
-   ```
-   git clone <repository-url>
-   cd go-server
-   ```
+## Running Server
+```
+go run cmd/server/main.go
+```
+Visit:
+- Browse: http://localhost:8080/
+- New Shader: http://localhost:8080/new
+- Existing Shader: http://localhost:8080/{id}
 
-2. **Install dependencies:**
-   ```
-   go mod tidy
-   ```
+## Adding Features
+- Add new Svelte stores/components under static/svelte/src.
+- Keep separation: stores = state, adapters = legacy bridge, components = UI.
 
-3. **Run the server:**
-   ```
-   go run cmd/server/main.go
-   ```
-
-4. **Access the application:**
-   Open your web browser and navigate to `http://localhost:8080` to view the web page. You can also interact with the API at `http://localhost:8080/api/items`.
-
-## Usage
-
-- **API Endpoints:**
-  - `GET /api/items` - Retrieve a list of items.
-  - `POST /api/items` - Create a new item.
-
-- **Web Routes:**
-  - `GET /` - Serve the index.html page.
+## TODO / Cleanup
+- Migrate shader_properties (tags/name editing) into Svelte.
+- Remove unused legacy JS once feature parity complete.
+- Add syntax highlighting (e.g. use Shiki or Prism lazy load).
+- Implement local draft persistence (localStorage) in editor store.
 
 ## License
-
-This project is licensed under the MIT License.
+MIT

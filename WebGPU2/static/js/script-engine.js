@@ -14,35 +14,64 @@ class ScriptEngine {
         this.frameRate = 60;
         this.animationFrame = null;
         this.eventTarget = new EventTarget();
+        
+        // Enhanced error handling
+        this.errorState = new Map(); // scriptId -> error info
+        this.retryCount = new Map(); // scriptId -> retry attempts
+        this.maxRetries = 3;
+        this.fallbackMode = false;
     }
 
     createScript(config) {
         const { id, code, bufferSpec, type = 'fragment' } = config;
         
-        console.log('ScriptEngine.createScript called with:', { id, code: code?.substring(0, 50) + '...', bufferSpec, type });
-        
-        const script = {
-            id,
-            code,
-            bufferSpec,
-            type,
-            enabled: true,
-            lastExecuted: 0,
-            executionCount: 0
-        };
+        try {
+            // Validate input parameters
+            if (!id || typeof id !== 'string') {
+                throw new Error('Script ID must be a non-empty string');
+            }
+            if (!code || typeof code !== 'string') {
+                throw new Error('Script code must be a non-empty string');
+            }
+            if (this.scripts.has(id)) {
+                throw new Error(`Script with ID "${id}" already exists`);
+            }
+            
+            console.log('ScriptEngine.createScript called with:', { id, code: code?.substring(0, 50) + '...', bufferSpec, type });
+            
+            const script = {
+                id,
+                code,
+                bufferSpec,
+                type,
+                enabled: true,
+                lastExecuted: 0,
+                executionCount: 0,
+                createdAt: Date.now()
+            };
 
-        console.log('Script object created:', script);
-        
-        console.log('Adding script to scripts map...');
-        this.scripts.set(id, script);
-        console.log('Script added to map, now calling bufferManager.createScriptBuffer...');
-        
-        this.bufferManager.createScriptBuffer(id, bufferSpec);
-        console.log('Buffer created for script');
-        
-        this.dispatchEvent('scriptCreated', { scriptId: id, script });
-        console.log('ScriptEngine.createScript completed successfully');
-        return script;
+            console.log('Script object created:', script);
+            
+            console.log('Adding script to scripts map...');
+            this.scripts.set(id, script);
+            console.log('Script added to map, now calling bufferManager.createScriptBuffer...');
+            
+            this.bufferManager.createScriptBuffer(id, bufferSpec);
+            console.log('Buffer created for script');
+            
+            // Clear any previous error state
+            this.errorState.delete(id);
+            this.retryCount.delete(id);
+            
+            this.dispatchEvent('scriptCreated', { scriptId: id, script });
+            console.log('ScriptEngine.createScript completed successfully');
+            return script;
+            
+        } catch (error) {
+            console.error(`Failed to create script ${id}:`, error);
+            this.handleScriptError(id, error, 'creation');
+            throw error;
+        }
     }
 
     updateScript(scriptId, newConfig) {
@@ -82,6 +111,18 @@ class ScriptEngine {
             return false;
         }
 
+        // Check if script is in error state and should be retried
+        if (this.errorState.has(scriptId)) {
+            const errorInfo = this.errorState.get(scriptId);
+            const timeSinceError = Date.now() - errorInfo.timestamp;
+            
+            // Wait at least 1 second before retry
+            if (timeSinceError < 1000) {
+                console.log(`Script ${scriptId} in cooldown period, skipping execution`);
+                return false;
+            }
+        }
+
         try {
             const pipeline = await this.getOrCreatePipeline(scriptId);
             if (!pipeline) {
@@ -93,13 +134,23 @@ class ScriptEngine {
             script.lastExecuted = Date.now();
             script.executionCount++;
             
+            // Clear error state on successful execution
+            this.errorState.delete(scriptId);
+            this.retryCount.delete(scriptId);
+            
             this.dispatchEvent('scriptExecuted', { scriptId, success: true });
             return true;
 
         } catch (error) {
             console.error(`Failed to execute script ${scriptId}:`, error);
+            this.handleScriptError(scriptId, error, 'execution');
             this.dispatchEvent('scriptExecuted', { scriptId, success: false, error });
-            throw error;
+            
+            // Don't re-throw if we're in fallback mode
+            if (!this.fallbackMode) {
+                throw error;
+            }
+            return false;
         }
     }
 
@@ -373,6 +424,66 @@ class ScriptEngine {
                 this.stopRealTimeExecution();
             }
         });
+    }
+
+    handleScriptError(scriptId, error, phase) {
+        const currentRetries = this.retryCount.get(scriptId) || 0;
+        
+        this.errorState.set(scriptId, {
+            error: error.message,
+            phase,
+            timestamp: Date.now(),
+            retries: currentRetries
+        });
+        
+        if (currentRetries < this.maxRetries) {
+            this.retryCount.set(scriptId, currentRetries + 1);
+            console.log(`Will retry script ${scriptId} (attempt ${currentRetries + 1}/${this.maxRetries})`);
+        } else {
+            console.warn(`Script ${scriptId} exceeded max retries, disabling`);
+            const script = this.scripts.get(scriptId);
+            if (script) {
+                script.enabled = false;
+            }
+        }
+        
+        this.dispatchEvent('scriptError', { 
+            scriptId, 
+            error: error.message, 
+            phase, 
+            retries: currentRetries 
+        });
+    }
+
+    enableFallbackMode() {
+        this.fallbackMode = true;
+        console.log('Script engine entered fallback mode - will continue execution despite errors');
+    }
+
+    disableFallbackMode() {
+        this.fallbackMode = false;
+    }
+
+    getErrorState(scriptId) {
+        return this.errorState.get(scriptId);
+    }
+
+    clearErrors(scriptId = null) {
+        if (scriptId) {
+            this.errorState.delete(scriptId);
+            this.retryCount.delete(scriptId);
+            const script = this.scripts.get(scriptId);
+            if (script) {
+                script.enabled = true;
+            }
+        } else {
+            this.errorState.clear();
+            this.retryCount.clear();
+            // Re-enable all scripts
+            for (const script of this.scripts.values()) {
+                script.enabled = true;
+            }
+        }
     }
 
     dispatchEvent(type, detail) {

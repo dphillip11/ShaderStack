@@ -178,52 +178,71 @@ class ShaderWorkspace {
         }
 
         try {
-            const shaderData = this.getCurrentShaderData();
-            
-            // Debug logging to understand the ID situation
-            console.log('saveShader called');
-            console.log('currentShader.id:', this.currentShader.id);
-            console.log('shaderData.id:', shaderData.id);
-            console.log('shaderData:', shaderData);
-            
-            // Determine if this is an update or create operation
-            const isUpdate = shaderData.id && shaderData.id !== null && shaderData.id !== undefined;
-            const endpoint = isUpdate 
-                ? `/api/shaders/${shaderData.id}` 
-                : '/api/shaders/new';
-            const method = isUpdate ? 'PUT' : 'POST';
+            // Use CRUD if available, otherwise fall back to direct API
+            if (window.shaderCRUD) {
+                // Update the CRUD with current shader data
+                const shaderData = this.getCurrentShaderData();
+                window.shaderCRUD.currentShader = shaderData;
+                
+                const result = await window.shaderCRUD.saveShader();
+                
+                // Update our ID if it was a new shader
+                if (result && result.id && !this.currentShader.id) {
+                    this.currentShader.id = result.id;
+                }
+                
+                this.dispatchEvent('shaderSaved', { shader: shaderData, result });
+                console.log('Shader saved successfully via CRUD:', result);
+                return result;
+            } else {
+                // Fallback to direct API call (CRUD not loaded)
+                const shaderData = this.getCurrentShaderData();
+                
+                // Debug logging to understand the ID situation
+                console.log('saveShader called');
+                console.log('currentShader.id:', this.currentShader.id);
+                console.log('shaderData.id:', shaderData.id);
+                console.log('shaderData:', shaderData);
+                
+                // Determine if this is an update or create operation
+                const isUpdate = !!(shaderData.id);
+                const endpoint = isUpdate 
+                    ? `/api/shaders/${shaderData.id}` 
+                    : '/api/shaders'; // FIX: previously /api/shaders/new (no such route)
+                const method = isUpdate ? 'PUT' : 'POST';
 
-            console.log('isUpdate:', isUpdate);
-            console.log('endpoint:', endpoint);
-            console.log('method:', method);
+                console.log('isUpdate:', isUpdate);
+                console.log('endpoint:', endpoint);
+                console.log('method:', method);
 
-            const response = await fetch(endpoint, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify(shaderData)
-            });
+                const response = await fetch(endpoint, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(shaderData)
+                });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Save failed with status:', response.status, 'Error:', errorText);
-                throw new Error(`Failed to save shader: ${response.status} ${errorText}`);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Save failed with status:', response.status, 'Error:', errorText);
+                    throw new Error(`Failed to save shader: ${response.status} ${errorText}`);
+                }
+
+                const result = await response.json();
+                console.log('Save response:', result);
+                
+                // Update shader ID if it was a new shader
+                if (!isUpdate && result.id) {
+                    console.log('Updating currentShader.id from', this.currentShader.id, 'to', result.id);
+                    this.currentShader.id = result.id;
+                }
+
+                this.dispatchEvent('shaderSaved', { shader: shaderData, result });
+                console.log('Shader saved successfully:', result);
+                return result;
             }
-
-            const result = await response.json();
-            console.log('Save response:', result);
-            
-            // Update shader ID if it was a new shader
-            if (!isUpdate && result.id) {
-                console.log('Updating currentShader.id from', this.currentShader.id, 'to', result.id);
-                this.currentShader.id = result.id;
-            }
-
-            this.dispatchEvent('shaderSaved', { shader: shaderData, result });
-            console.log('Shader saved successfully:', result);
-            return result;
 
         } catch (error) {
             console.error('Failed to save shader:', error);
@@ -239,7 +258,15 @@ class ShaderWorkspace {
 
         console.log('addScript called with:', { code: code?.substring(0, 50) + '...', bufferSpec, scriptId });
 
-        const id = scriptId || Date.now();
+        // Generate next available integer ID as string
+        let id = scriptId;
+        if (!id) {
+            const existingIds = this.scriptEngine.scripts ? Array.from(this.scriptEngine.scripts.keys()).map(id => parseInt(id)).filter(n => !isNaN(n)) : [];
+            const maxId = existingIds.length > 0 ? Math.max(...existingIds) : -1;
+            id = String(maxId + 1);
+        } else {
+            id = String(id); // Ensure ID is string
+        }
         console.log('Using script ID:', id);
 
         const defaultBufferSpec = {

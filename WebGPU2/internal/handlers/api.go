@@ -109,6 +109,9 @@ func BlockingAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
             return
         }
 
+        // print request to console for debugging
+        fmt.Printf("AuthMiddleware: Checking session token %s\n", cookie.Value)
+
         sessionsMu.Lock()
         session, exists := sessions[cookie.Value]
         sessionsMu.Unlock()
@@ -259,7 +262,64 @@ func CreateShaderAPI(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(map[string]interface{}{
         "id":      createdShader.ID,
         "message": "Shader created successfully",
+        "shader":  createdShader,
     })
+}
 
-    http.Redirect(w, r, fmt.Sprintf("i/%d", createdShader.ID), http.StatusSeeOther)
+// UpdateShaderProperties handles PUT requests for updating shader properties only
+func UpdateShaderProperties(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    id, err := strconv.Atoi(vars["id"])
+    if err != nil {
+        http.Error(w, "Invalid shader ID", http.StatusBadRequest)
+        return
+    }
+    
+    // Get user ID from authentication middleware
+    userID, err := strconv.Atoi(r.Header.Get("X-User-ID"))
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+    
+    // Parse the request body for properties update
+    var updateData struct {
+        Name string      `json:"name"`
+        Tags []models.Tag `json:"tags"`
+    }
+    
+    if err := json.NewDecoder(r.Body).Decode(&updateData); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+    
+    // Get the existing shader first
+    existingShader := data.GetRepository().GetShaderByID(id)
+    if existingShader == nil {
+        http.Error(w, "Shader not found", http.StatusNotFound)
+        return
+    }
+    
+    // Check if user owns the shader
+    if existingShader.UserID != userID {
+        http.Error(w, "Forbidden: You can only edit your own shaders", http.StatusForbidden)
+        return
+    }
+    
+    // Update only the properties
+    existingShader.Name = updateData.Name
+    existingShader.Tags = updateData.Tags
+    
+    updatedShader, err := data.GetRepository().UpdateShader(id, *existingShader)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "id":      updatedShader.ID,
+        "message": "Shader properties updated successfully",
+        "shader":  updatedShader,
+    })
 }
