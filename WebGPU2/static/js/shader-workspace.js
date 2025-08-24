@@ -180,11 +180,22 @@ class ShaderWorkspace {
         try {
             const shaderData = this.getCurrentShaderData();
             
-            const endpoint = shaderData.id 
-                ? `/api/shaders/${shaderData.id}` 
-                : '/api/shaders';
+            // Debug logging to understand the ID situation
+            console.log('saveShader called');
+            console.log('currentShader.id:', this.currentShader.id);
+            console.log('shaderData.id:', shaderData.id);
+            console.log('shaderData:', shaderData);
             
-            const method = shaderData.id ? 'PUT' : 'POST';
+            // Determine if this is an update or create operation
+            const isUpdate = shaderData.id && shaderData.id !== null && shaderData.id !== undefined;
+            const endpoint = isUpdate 
+                ? `/api/shaders/${shaderData.id}` 
+                : '/api/shaders/new';
+            const method = isUpdate ? 'PUT' : 'POST';
+
+            console.log('isUpdate:', isUpdate);
+            console.log('endpoint:', endpoint);
+            console.log('method:', method);
 
             const response = await fetch(endpoint, {
                 method,
@@ -196,18 +207,22 @@ class ShaderWorkspace {
             });
 
             if (!response.ok) {
-                const error = await response.text();
-                throw new Error(error || 'Failed to save shader');
+                const errorText = await response.text();
+                console.error('Save failed with status:', response.status, 'Error:', errorText);
+                throw new Error(`Failed to save shader: ${response.status} ${errorText}`);
             }
 
             const result = await response.json();
+            console.log('Save response:', result);
             
             // Update shader ID if it was a new shader
-            if (!shaderData.id) {
+            if (!isUpdate && result.id) {
+                console.log('Updating currentShader.id from', this.currentShader.id, 'to', result.id);
                 this.currentShader.id = result.id;
             }
 
             this.dispatchEvent('shaderSaved', { shader: shaderData, result });
+            console.log('Shader saved successfully:', result);
             return result;
 
         } catch (error) {
@@ -430,6 +445,56 @@ class ShaderWorkspace {
             this.dispatchEvent('exportError', { scriptId, format, error });
             throw error;
         }
+    }
+
+    // Script management API for properties integration
+    async createNewScript() {
+        if (!this.isInitialized) {
+            throw new Error('Workspace not initialized');
+        }
+
+        const defaultCode = this.getDefaultShaderCode('fragment');
+        const defaultBufferSpec = {
+            format: 'rgba8unorm',
+            width: 512,
+            height: 512
+        };
+
+        const scriptId = await this.addScript(defaultCode, defaultBufferSpec);
+        this.dispatchEvent('scriptCreated', { scriptId });
+        return scriptId;
+    }
+
+    async deleteScript(scriptId) {
+        if (!this.isInitialized) {
+            throw new Error('Workspace not initialized');
+        }
+
+        if (this.getScriptCount() <= 1) {
+            throw new Error('Cannot delete the last script');
+        }
+
+        this.removeScript(scriptId);
+        this.dispatchEvent('scriptDeleted', { scriptId });
+    }
+
+    getScript(scriptId) {
+        if (!this.scriptEngine) return null;
+        return this.scriptEngine.scripts.get(scriptId);
+    }
+
+    getScriptCount() {
+        if (!this.scriptEngine) return 0;
+        return this.scriptEngine.scripts.size;
+    }
+
+    getAvailableScriptIds() {
+        if (!this.scriptEngine) return [];
+        return Array.from(this.scriptEngine.scripts.keys());
+    }
+
+    setActiveScript(scriptId) {
+        this.dispatchEvent('activeScriptChanged', { scriptId });
     }
 
     // Private helper methods

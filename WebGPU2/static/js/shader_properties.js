@@ -12,6 +12,9 @@ class ShaderPropertiesManager {
             onRevert: options.onRevert || null,
             onNameChange: options.onNameChange || null,
             onTagsChange: options.onTagsChange || null,
+            onBufferChange: options.onBufferChange || null,
+            onScriptAdd: options.onScriptAdd || null,
+            onScriptDelete: options.onScriptDelete || null,
             ...options
         };
         
@@ -20,6 +23,8 @@ class ShaderPropertiesManager {
         this.isDirty = false;
         this.autoSaveTimeout = null;
         this.availableTags = [];
+        this.activeScriptId = 0;
+        this.workspace = null; // Will be set by the workspace
         
         this.init();
     }
@@ -35,6 +40,7 @@ class ShaderPropertiesManager {
         this.setupEventListeners();
         this.storeOriginalData();
         this.updateStatus('saved');
+        this.updateBufferDisplay();
     }
 
     bindElements() {
@@ -50,8 +56,15 @@ class ShaderPropertiesManager {
         this.lastModified = this.container.querySelector('#last-modified');
         this.nameFeedback = this.container.querySelector('#name-feedback');
         
-        // Buffer configuration elements (multiple scripts)
-        this.scriptBufferConfigs = this.container.querySelectorAll('.script-buffer-config');
+        // Active script configuration elements
+        this.activeScriptIdDisplay = this.container.querySelector('#active-script-id');
+        this.addScriptBtn = this.container.querySelector('#add-script-btn');
+        this.deleteScriptBtn = this.container.querySelector('#delete-script-btn');
+        this.activeBufferFormat = this.container.querySelector('#active-buffer-format');
+        this.activeBufferWidth = this.container.querySelector('#active-buffer-width');
+        this.activeBufferHeight = this.container.querySelector('#active-buffer-height');
+        this.bufferSizeDisplay = this.container.querySelector('#buffer-size-display');
+        this.bufferMemoryDisplay = this.container.querySelector('#buffer-memory-display');
     }
 
     setupEventListeners() {
@@ -81,6 +94,14 @@ class ShaderPropertiesManager {
             this.revertBtn.addEventListener('click', this.revert.bind(this));
         }
 
+        // Script management buttons
+        if (this.addScriptBtn) {
+            this.addScriptBtn.addEventListener('click', this.addScript.bind(this));
+        }
+        if (this.deleteScriptBtn) {
+            this.deleteScriptBtn.addEventListener('click', this.deleteScript.bind(this));
+        }
+
         // Tag removal (delegated event handling)
         if (this.currentTagsContainer) {
             this.currentTagsContainer.addEventListener('click', this.handleTagRemoval.bind(this));
@@ -91,24 +112,18 @@ class ShaderPropertiesManager {
             this.tagSuggestions.addEventListener('click', this.handleSuggestionClick.bind(this));
         }
 
-        // Buffer configuration inputs (multiple scripts)
-        this.scriptBufferConfigs.forEach((scriptConfig, index) => {
-            const formatSelect = scriptConfig.querySelector(`#buffer-format-${index}`);
-            const widthInput = scriptConfig.querySelector(`#buffer-width-${index}`);
-            const heightInput = scriptConfig.querySelector(`#buffer-height-${index}`);
-            
-            if (formatSelect) {
-                formatSelect.addEventListener('change', this.handleBufferChange.bind(this));
-            }
-            if (widthInput) {
-                widthInput.addEventListener('input', this.handleBufferChange.bind(this));
-                widthInput.addEventListener('blur', (e) => this.validateBufferDimensions(e, index));
-            }
-            if (heightInput) {
-                heightInput.addEventListener('input', this.handleBufferChange.bind(this));
-                heightInput.addEventListener('blur', (e) => this.validateBufferDimensions(e, index));
-            }
-        });
+        // Active script buffer configuration
+        if (this.activeBufferFormat) {
+            this.activeBufferFormat.addEventListener('change', this.handleActiveBufferChange.bind(this));
+        }
+        if (this.activeBufferWidth) {
+            this.activeBufferWidth.addEventListener('input', this.handleActiveBufferChange.bind(this));
+            this.activeBufferWidth.addEventListener('blur', this.validateActiveBufferDimensions.bind(this));
+        }
+        if (this.activeBufferHeight) {
+            this.activeBufferHeight.addEventListener('input', this.handleActiveBufferChange.bind(this));
+            this.activeBufferHeight.addEventListener('blur', this.validateActiveBufferDimensions.bind(this));
+        }
     }
 
     handleNameInput(event) {
@@ -535,6 +550,196 @@ class ShaderPropertiesManager {
         setTimeout(() => {
             notification.classList.remove('show');
         }, 3000);
+    }
+
+    // New script management methods
+    handleActiveBufferChange(event) {
+        this.markDirty();
+        this.updateBufferDisplay();
+        
+        if (this.workspace) {
+            const bufferSpec = this.getActiveBufferSpec();
+            this.workspace.updateScriptBuffer(this.activeScriptId, bufferSpec);
+        }
+        
+        if (this.options.autoSave) {
+            this.scheduleAutoSave();
+        }
+        
+        if (this.options.onBufferChange) {
+            this.options.onBufferChange(this.getActiveBufferSpec());
+        }
+    }
+
+    validateActiveBufferDimensions() {
+        const width = parseInt(this.activeBufferWidth?.value) || 0;
+        const height = parseInt(this.activeBufferHeight?.value) || 0;
+        
+        if (width < 1 || width > 4096) {
+            this.showNotification('Width must be between 1 and 4096', 'warning');
+            if (this.activeBufferWidth) this.activeBufferWidth.value = Math.max(1, Math.min(4096, width));
+        }
+        
+        if (height < 1 || height > 4096) {
+            this.showNotification('Height must be between 1 and 4096', 'warning');
+            if (this.activeBufferHeight) this.activeBufferHeight.value = Math.max(1, Math.min(4096, height));
+        }
+        
+        this.updateBufferDisplay();
+        return width >= 1 && width <= 4096 && height >= 1 && height <= 4096;
+    }
+
+    async addScript() {
+        try {
+            if (this.workspace) {
+                const newScriptId = await this.workspace.createNewScript();
+                this.setActiveScript(newScriptId);
+                this.markDirty();
+                
+                if (this.options.onScriptAdd) {
+                    this.options.onScriptAdd(newScriptId);
+                }
+                
+                this.showNotification(`Script ${newScriptId} created`, 'success');
+            } else {
+                this.showNotification('Workspace not available', 'error');
+            }
+        } catch (error) {
+            console.error('Error adding script:', error);
+            this.showNotification('Failed to add script: ' + error.message, 'error');
+        }
+    }
+
+    async deleteScript() {
+        if (this.workspace && this.workspace.getScriptCount() <= 1) {
+            this.showNotification('Cannot delete the last script', 'warning');
+            return;
+        }
+
+        const confirmed = confirm(`Are you sure you want to delete Script ${this.activeScriptId}?`);
+        if (!confirmed) return;
+
+        try {
+            if (this.workspace) {
+                await this.workspace.deleteScript(this.activeScriptId);
+                
+                // Switch to the first available script
+                const availableScripts = this.workspace.getAvailableScriptIds();
+                if (availableScripts.length > 0) {
+                    this.setActiveScript(availableScripts[0]);
+                }
+                
+                this.markDirty();
+                
+                if (this.options.onScriptDelete) {
+                    this.options.onScriptDelete(this.activeScriptId);
+                }
+                
+                this.showNotification(`Script ${this.activeScriptId} deleted`, 'success');
+            } else {
+                this.showNotification('Workspace not available', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting script:', error);
+            this.showNotification('Failed to delete script: ' + error.message, 'error');
+        }
+    }
+
+    setActiveScript(scriptId) {
+        this.activeScriptId = scriptId;
+        
+        // Update UI
+        if (this.activeScriptIdDisplay) {
+            this.activeScriptIdDisplay.textContent = scriptId;
+        }
+        
+        // Load script's buffer configuration
+        if (this.workspace) {
+            const script = this.workspace.getScript(scriptId);
+            if (script && script.bufferSpec) {
+                this.loadActiveBufferConfig(script.bufferSpec);
+            }
+        }
+        
+        this.updateDeleteButtonState();
+    }
+
+    updateDeleteButtonState() {
+        if (this.deleteScriptBtn && this.workspace) {
+            const scriptCount = this.workspace.getScriptCount();
+            this.deleteScriptBtn.disabled = scriptCount <= 1;
+            this.deleteScriptBtn.title = scriptCount <= 1 ? 
+                'Cannot delete the last script' : 
+                'Delete current script';
+        }
+    }
+
+    loadActiveBufferConfig(bufferSpec) {
+        if (this.activeBufferFormat) {
+            this.activeBufferFormat.value = bufferSpec.format || 'rgba8unorm';
+        }
+        if (this.activeBufferWidth) {
+            this.activeBufferWidth.value = bufferSpec.width || 512;
+        }
+        if (this.activeBufferHeight) {
+            this.activeBufferHeight.value = bufferSpec.height || 512;
+        }
+        
+        this.updateBufferDisplay();
+    }
+
+    getActiveBufferSpec() {
+        return {
+            format: this.activeBufferFormat?.value || 'rgba8unorm',
+            width: parseInt(this.activeBufferWidth?.value) || 512,
+            height: parseInt(this.activeBufferHeight?.value) || 512
+        };
+    }
+
+    updateBufferDisplay() {
+        const spec = this.getActiveBufferSpec();
+        
+        if (this.bufferSizeDisplay) {
+            this.bufferSizeDisplay.textContent = `${spec.width}×${spec.height}`;
+        }
+        
+        if (this.bufferMemoryDisplay) {
+            const bytesPerPixel = this.getBytesPerPixelForFormat(spec.format);
+            const totalBytes = spec.width * spec.height * bytesPerPixel;
+            const mb = (totalBytes / (1024 * 1024)).toFixed(1);
+            this.bufferMemoryDisplay.textContent = `${mb} MB`;
+        }
+    }
+
+    getBytesPerPixelForFormat(format) {
+        const formatMap = {
+            'rgba8unorm': 4,
+            'rgba16float': 8,
+            'rgba32float': 16,
+            'r32float': 4,
+            'rg32float': 8
+        };
+        return formatMap[format] || 4;
+    }
+
+    // Integration with workspace
+    setWorkspace(workspace) {
+        this.workspace = workspace;
+        
+        // Listen for workspace events
+        if (workspace) {
+            workspace.addEventListener('scriptCreated', (event) => {
+                this.updateDeleteButtonState();
+            });
+            
+            workspace.addEventListener('scriptDeleted', (event) => {
+                this.updateDeleteButtonState();
+            });
+            
+            workspace.addEventListener('activeScriptChanged', (event) => {
+                this.setActiveScript(event.detail.scriptId);
+            });
+        }
     }
 
     // Public API methods

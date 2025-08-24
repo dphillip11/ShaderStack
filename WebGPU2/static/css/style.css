@@ -158,6 +158,56 @@ h1 {
     background-color: rgba(102, 126, 234, 0.1);
 }
 
+/* Script management styles */
+.active-script-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: var(--bg-secondary);
+    border-radius: 6px;
+}
+
+.script-label {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.script-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-icon {
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-icon:hover:not(:disabled) {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.btn-icon:disabled {
+    background: var(--border-color);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.btn-icon i {
+    font-size: 12px;
+}
+
 /* Browse Page Styles */
 .browse-page {
     max-width: 1200px;
@@ -617,50 +667,63 @@ h1 {
 /* Buffer Configuration Styles */
 .buffer-config {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 1rem;
-    margin-top: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
 }
 
 .buffer-field {
     display: flex;
     flex-direction: column;
+    gap: 5px;
 }
 
 .buffer-field label {
-    font-size: 0.85rem;
-    margin-bottom: 0.25rem;
-    color: #4a5568;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
 }
 
 .buffer-format-select,
 .buffer-width-input,
 .buffer-height-input {
-    padding: 0.5rem;
-    border: 2px solid #e2e8f0;
-    border-radius: 5px;
-    font-size: 0.9rem;
-    background-color: #f8fafc;
-    transition: all 0.3s;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 14px;
 }
 
 .buffer-format-select:focus,
 .buffer-width-input:focus,
 .buffer-height-input:focus {
     outline: none;
-    border-color: #667eea;
-    background-color: white;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
 }
 
-.buffer-format-select {
-    cursor: pointer;
+/* Buffer preview styles */
+.buffer-preview {
+    margin-top: 15px;
+    padding: 10px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    border-left: 4px solid var(--accent-color);
 }
 
-.buffer-width-input,
-.buffer-height-input {
-    text-align: center;
+.buffer-stats {
+    display: flex;
+    gap: 20px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.buffer-stats span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 
 @media (max-width: 768px) {
@@ -1021,30 +1084,50 @@ h1 {
 /* Notification Styles */
 .notification {
     position: fixed;
-    top: 2rem;
-    right: 2rem;
-    background: white;
-    border-radius: 5px;
-    padding: 1rem 1.5rem;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-width: 300px;
-    z-index: 1001;
-    border-left: 4px solid #4299e1;
+    top: 20px;
+    right: 20px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    color: white;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    animation: slideIn 0.3s ease;
+    max-width: 400px;
+    transform: translateX(100%);
+    opacity: 0;
+}
+
+.notification.show {
+    transform: translateX(0);
+    opacity: 1;
 }
 
 .notification.success {
-    border-left-color: #48bb78;
+    background: linear-gradient(135deg, #10b981, #059669);
 }
 
 .notification.error {
-    border-left-color: #f56565;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
 .notification.warning {
-    border-left-color: #ed8936;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.notification.info {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 .notification-close {

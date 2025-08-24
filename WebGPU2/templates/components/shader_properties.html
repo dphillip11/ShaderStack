@@ -35,50 +35,59 @@
     </div>
 
     <div class="property-group">
-        <label>Buffer Configuration</label>
-        {{if .Shader.ShaderScripts}}
-            {{range $index, $script := .Shader.ShaderScripts}}
-            <div class="script-buffer-config" data-script-index="{{$index}}">
-                <h4>Script {{$index}}</h4>
-                <div class="buffer-config">
-                    <div class="buffer-field">
-                        <label for="buffer-format-{{$index}}">Format</label>
-                        <select id="buffer-format-{{$index}}" class="buffer-format-select" data-script-index="{{$index}}">
-                            <option value="rgba8unorm" {{if eq $script.Buffer.Format "rgba8unorm"}}selected{{end}}>RGBA8 Unorm</option>
-                            <option value="rgba16float" {{if eq $script.Buffer.Format "rgba16float"}}selected{{end}}>RGBA16 Float</option>
-                            <option value="rgba32float" {{if eq $script.Buffer.Format "rgba32float"}}selected{{end}}>RGBA32 Float</option>
-                            <option value="r32float" {{if eq $script.Buffer.Format "r32float"}}selected{{end}}>R32 Float</option>
-                            <option value="rg32float" {{if eq $script.Buffer.Format "rg32float"}}selected{{end}}>RG32 Float</option>
-                        </select>
-                    </div>
-                    <div class="buffer-field">
-                        <label for="buffer-width-{{$index}}">Width</label>
-                        <input type="number" 
-                               id="buffer-width-{{$index}}" 
-                               class="buffer-width-input"
-                               data-script-index="{{$index}}"
-                               value="{{if $script.Buffer.Width}}{{$script.Buffer.Width}}{{else}}512{{end}}"
-                               min="1"
-                               max="4096"
-                               placeholder="512">
-                    </div>
-                    <div class="buffer-field">
-                        <label for="buffer-height-{{$index}}">Height</label>
-                        <input type="number" 
-                               id="buffer-height-{{$index}}" 
-                               class="buffer-height-input"
-                               data-script-index="{{$index}}"
-                               value="{{if $script.Buffer.Height}}{{$script.Buffer.Height}}{{else}}512{{end}}"
-                               min="1"
-                               max="4096"
-                               placeholder="512">
-                    </div>
-                </div>
+        <label>Active Script Configuration</label>
+        <div class="active-script-info">
+            <span class="script-label">Script <span id="active-script-id">0</span></span>
+            <div class="script-actions">
+                <button type="button" class="btn-icon" id="add-script-btn" title="Add new script">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button type="button" class="btn-icon" id="delete-script-btn" title="Delete current script">
+                    <i class="fas fa-trash"></i>
+                </button>
             </div>
-            {{end}}
-        {{else}}
-            <p class="no-scripts">No shader scripts available</p>
-        {{end}}
+        </div>
+        
+        <div class="buffer-config" id="active-buffer-config">
+            <div class="buffer-field">
+                <label for="active-buffer-format">Format</label>
+                <select id="active-buffer-format" class="buffer-format-select">
+                    <option value="rgba8unorm">RGBA8 Unorm</option>
+                    <option value="rgba16float">RGBA16 Float</option>
+                    <option value="rgba32float">RGBA32 Float</option>
+                    <option value="r32float">R32 Float</option>
+                    <option value="rg32float">RG32 Float</option>
+                </select>
+            </div>
+            <div class="buffer-field">
+                <label for="active-buffer-width">Width</label>
+                <input type="number" 
+                       id="active-buffer-width" 
+                       class="buffer-width-input"
+                       value="512"
+                       min="1"
+                       max="4096"
+                       placeholder="512">
+            </div>
+            <div class="buffer-field">
+                <label for="active-buffer-height">Height</label>
+                <input type="number" 
+                       id="active-buffer-height" 
+                       class="buffer-height-input"
+                       value="512"
+                       min="1"
+                       max="4096"
+                       placeholder="512">
+            </div>
+        </div>
+        
+        <div class="buffer-preview">
+            <label>Buffer Info</label>
+            <div class="buffer-stats">
+                <span>Size: <span id="buffer-size-display">512×512</span></span>
+                <span>Memory: <span id="buffer-memory-display">1.0 MB</span></span>
+            </div>
+        </div>
     </div>
 
     <div class="property-group">

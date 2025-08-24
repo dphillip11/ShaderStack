@@ -163,6 +163,8 @@ fn main() -> @location(0) vec4<f32> {
     <script src="/static/js/script-engine.js"></script>
     <script src="/static/js/visualization-engine.js"></script>
     <script src="/static/js/shader-workspace.js"></script>
+    <script src="/static/js/shader-crud.js"></script>
+    <script src="/static/js/shader-crud-tests.js"></script>
     <script src="/static/js/split_window.js"></script>
     
     <!-- Editor Integration Script -->
@@ -207,16 +209,24 @@ fn main() -> @location(0) vec4<f32> {
                 await workspace.initialize();
                 console.log('Workspace initialization complete');
                 
-                // Simple shader creation without complex loading logic
-                console.log('Creating default shader...');
-                await workspace.createNewShader(window.shaderData?.name || 'New Shader');
-                activeScriptId = 0;
+                // Check if we have existing shader data or should create new
+                if (window.shaderData && window.shaderData.id) {
+                    console.log('Loading existing shader:', window.shaderData);
+                    showConsoleMessage(`Loading shader: ${window.shaderData.name}`, 'info');
+                    await workspace.loadShader(window.shaderData);
+                    activeScriptId = window.shaderData.shader_scripts.length > 0 ? window.shaderData.shader_scripts[0].id : 0;
+                } else {
+                    console.log('Creating new shader...');
+                    showConsoleMessage('Creating new shader...', 'info');
+                    await workspace.createNewShader(window.shaderData?.name || 'New Shader');
+                    activeScriptId = 0;
+                }
                 
                 // Update the textarea data-script-id to match the actual script ID
                 const defaultTextarea = document.querySelector('#editor-0');
                 if (defaultTextarea) {
-                    defaultTextarea.dataset.scriptId = '0';
-                    console.log('Updated textarea script ID to 0');
+                    defaultTextarea.dataset.scriptId = activeScriptId.toString();
+                    console.log('Updated textarea script ID to', activeScriptId);
                 }
                 
                 showConsoleMessage('Workspace ready', 'success');
@@ -406,6 +416,10 @@ fn main() -> @location(0) vec4<f32> {
                     try {
                         const newScriptId = await workspace.addScript();
                         
+                        // Get the actual script data from workspace
+                        const newScript = workspace.getScript(newScriptId);
+                        const scriptCode = newScript ? newScript.code : workspace.getDefaultShaderCode('fragment');
+                        
                         // Add new tab and editor
                         const tabContainer = document.querySelector('.code-tabs');
                         const editorContainer = document.querySelector('.code-editor-container');
@@ -420,7 +434,7 @@ fn main() -> @location(0) vec4<f32> {
                             // Insert before add button
                             tabContainer.insertBefore(newTab, addScriptBtn);
                             
-                            // Create new editor
+                            // Create new editor with the actual script code
                             const newEditor = document.createElement('div');
                             newEditor.className = 'code-editor-wrapper';
                             newEditor.id = `wrapper-${newScriptId}`;
@@ -428,10 +442,22 @@ fn main() -> @location(0) vec4<f32> {
                                 <textarea id="editor-${newScriptId}" 
                                         class="shader-code" 
                                         data-script-id="${newScriptId}"
-                                        placeholder="Enter your WGSL shader code here...">${workspace.getDefaultShaderCode('fragment')}</textarea>
+                                        placeholder="Enter your WGSL shader code here...">${scriptCode}</textarea>
                             `;
                             
                             editorContainer.appendChild(newEditor);
+                            
+                            // Set up event listener for the new editor
+                            const newTextarea = newEditor.querySelector('textarea');
+                            let debounceTimer;
+                            newTextarea.addEventListener('input', () => {
+                                clearTimeout(debounceTimer);
+                                debounceTimer = setTimeout(() => {
+                                    if (workspace) {
+                                        workspace.updateScriptCode(newScriptId, newTextarea.value);
+                                    }
+                                }, 500);
+                            });
                             
                             // Switch to new tab
                             newTab.click();

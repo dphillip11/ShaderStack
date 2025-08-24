@@ -24,9 +24,144 @@ function initializeBrowsePage() {
 
 // Editor page functionality  
 function initializeEditorPage() {
-    setupCodeEditor();
-    setupShaderProperties();
-    setupShaderActions();
+    initializeShaderWorkspace();
+}
+
+// Initialize the shader workspace and properties integration
+async function initializeShaderWorkspace() {
+    try {
+        console.log('Initializing shader workspace...');
+        
+        // Initialize workspace
+        const workspaceContainer = document.querySelector('.shader-editor-container') || document.body;
+        window.shaderWorkspace = new ShaderWorkspace(workspaceContainer, {
+            autoSave: true,
+            autoSaveDelay: 3000
+        });
+        
+        await window.shaderWorkspace.initialize();
+        console.log('Shader workspace initialized');
+        
+        // Initialize properties manager
+        const propertiesManager = new ShaderPropertiesManager(null, {
+            autoSave: true,
+            autoSaveDelay: 3000,
+            onSave: async (data) => {
+                // Integrate with workspace save
+                if (window.shaderWorkspace.currentShader) {
+                    // Update shader properties
+                    window.shaderWorkspace.currentShader.name = data.name;
+                    window.shaderWorkspace.currentShader.tags = data.tags;
+                    
+                    // Save through workspace
+                    return await window.shaderWorkspace.saveShader();
+                }
+            },
+            onBufferChange: (bufferSpec) => {
+                console.log('Buffer spec changed:', bufferSpec);
+            }
+        });
+        
+        // Connect workspace and properties manager
+        propertiesManager.setWorkspace(window.shaderWorkspace);
+        window.shaderPropertiesManager = propertiesManager;
+        
+        // Setup tab switching to sync with properties
+        setupTabSwitching();
+        
+        // Load existing shader if available
+        if (window.shaderData) {
+            console.log('Loading existing shader data:', window.shaderData);
+            await window.shaderWorkspace.loadShader(window.shaderData);
+            
+            // Set initial active script
+            if (window.shaderData.shader_scripts && window.shaderData.shader_scripts.length > 0) {
+                propertiesManager.setActiveScript(window.shaderData.shader_scripts[0].id);
+            }
+        } else {
+            // Create new shader
+            console.log('Creating new shader...');
+            const newShader = await window.shaderWorkspace.createNewShader('New Shader');
+            propertiesManager.setActiveScript(0);
+        }
+        
+        // Setup run button
+        setupRunButton();
+        
+        console.log('Shader workspace setup complete');
+        
+    } catch (error) {
+        console.error('Failed to initialize shader workspace:', error);
+        showNotification('Failed to initialize shader editor: ' + error.message, 'error');
+    }
+}
+
+// Setup tab switching to sync with properties manager
+function setupTabSwitching() {
+    const tabs = document.querySelectorAll('.tab-btn');
+    const editors = document.querySelectorAll('.code-editor');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            // Remove active class from all tabs and editors
+            tabs.forEach(t => t.classList.remove('active'));
+            editors.forEach(e => e.classList.remove('active'));
+            
+            // Add active class to clicked tab
+            tab.classList.add('active');
+            
+            // Show corresponding editor
+            const targetEditor = document.getElementById(tab.dataset.target);
+            if (targetEditor) {
+                targetEditor.classList.add('active');
+            }
+            
+            // Update properties manager active script
+            const scriptId = parseInt(tab.dataset.scriptId) || 0;
+            if (window.shaderPropertiesManager) {
+                window.shaderPropertiesManager.setActiveScript(scriptId);
+            }
+        });
+    });
+}
+
+// Setup run button functionality
+function setupRunButton() {
+    const runBtn = document.getElementById('run-shader') || document.querySelector('.run-btn');
+    if (runBtn) {
+        runBtn.addEventListener('click', async () => {
+            if (!window.shaderWorkspace) {
+                showNotification('Shader workspace not initialized', 'error');
+                return;
+            }
+            
+            try {
+                runBtn.disabled = true;
+                runBtn.textContent = 'Running...';
+                
+                // Get current code from active editor
+                const activeEditor = document.querySelector('.code-editor.active');
+                if (activeEditor) {
+                    const scriptId = parseInt(activeEditor.dataset.scriptId) || 0;
+                    const code = activeEditor.value || activeEditor.textContent;
+                    
+                    // Update script code in workspace
+                    window.shaderWorkspace.updateScriptCode(scriptId, code);
+                }
+                
+                // Run all scripts
+                await window.shaderWorkspace.runAllScripts();
+                showNotification('Shader executed successfully!', 'success');
+                
+            } catch (error) {
+                console.error('Shader execution failed:', error);
+                showNotification('Shader execution failed: ' + error.message, 'error');
+            } finally {
+                runBtn.disabled = false;
+                runBtn.textContent = 'Run';
+            }
+        });
+    }
 }
 
 // Shader actions (delete functionality)
