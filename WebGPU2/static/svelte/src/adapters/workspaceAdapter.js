@@ -16,6 +16,18 @@ export async function initWorkspace() {
     let shaderData = window.shaderData;
     console.log('initWorkspace shaderData:', shaderData);
     
+    // Function to decode JSON-encoded strings
+    function decodeCodeStrings(scripts) {
+      return scripts.map(script => ({
+        ...script,
+        code: typeof script.code === 'string' && 
+              script.code.startsWith('"') && script.code.endsWith('"') && 
+              (script.code.includes('\\n') || script.code.includes('\\"'))
+              ? JSON.parse(script.code) 
+              : script.code
+      }));
+    }
+    
     if (shaderData && shaderData.id) {
       // Ensure shader_scripts is valid array
       if (!shaderData.shader_scripts || !Array.isArray(shaderData.shader_scripts)) {
@@ -27,8 +39,8 @@ export async function initWorkspace() {
         }];
       }
       
-      // Convert numeric IDs to strings for script engine compatibility
-      shaderData.shader_scripts = shaderData.shader_scripts.map(script => ({
+      // Decode JSON-encoded code strings and convert numeric IDs to strings
+      shaderData.shader_scripts = decodeCodeStrings(shaderData.shader_scripts).map(script => ({
         ...script,
         id: String(script.id)
       }));

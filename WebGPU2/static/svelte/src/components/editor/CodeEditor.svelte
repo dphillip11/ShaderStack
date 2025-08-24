@@ -3,8 +3,35 @@
   import { editorState, updateScriptCode } from '../../stores/editor.js';
   export let script = null; // { id, code }
   const dispatch = createEventDispatcher();
-  let localCode = script?.code || '';
-  $: if (script && script.code !== localCode) localCode = script.code;
+  
+  // Function to decode JSON-encoded strings
+  function decodeCode(rawCode) {
+    if (!rawCode) return '';
+    
+    // If the code looks like a JSON-encoded string (starts and ends with quotes)
+    // and contains escaped characters, try to parse it
+    if (typeof rawCode === 'string' && 
+        rawCode.startsWith('"') && rawCode.endsWith('"') && 
+        (rawCode.includes('\\n') || rawCode.includes('\\"'))) {
+      try {
+        return JSON.parse(rawCode);
+      } catch (e) {
+        console.warn('Failed to decode JSON string, using raw:', e);
+        return rawCode;
+      }
+    }
+    
+    return rawCode;
+  }
+  
+  let localCode = '';
+  let lastScriptId = null;
+  
+  // Only update localCode when script changes, not during editing
+  $: if (script && script.id !== lastScriptId) {
+    localCode = decodeCode(script.code) || '';
+    lastScriptId = script.id;
+  }
 
   let timeout;
   function onInput() {

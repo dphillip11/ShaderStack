@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{block "Title" .}}{{ end }} - WebGPU Shader Hub</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Removed split_window.css (legacy layout removed) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Removed legacy login.js & modal template; auth handled by Svelte AuthBar -->
+</head>
+<body>
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="/" class="brand-link">
+                    <i class="fas fa-cube"></i>
+                    WebGPU Shaders
+                </a>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="/" class="nav-link">
+                    <i class="fas fa-search"></i> Browse
+                </a>
+                <a href="/my" class="nav-link" data-auth="required">
+                    <i class="fas fa-user"></i> My Shaders
+                </a>
+                <a href="/new" class="nav-link" data-auth="required">
+                    <i class="fas fa-plus"></i> New Shader
+                </a>
+            </nav>
+            
+            <div class="nav-auth">
+                <div id="auth-root"></div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <!-- Svelte mount point -->
+        <div id="svelte-root"></div>
+        {{block "Content" .}}{{ end }}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 WebGPU Shader Hub. Explore and share WebGPU shaders.</p>
+        </div>
+    </footer>
+
+    <!-- Legacy JS trimmed: removed search.js & app.js (handled by Svelte) -->
+    <!-- Svelte bundle -->
+    <script type="module" src="/static/svelte/dist/assets/app.js"></script>
+    <!-- Inject auth state for Svelte -->
+    <script>window.__AUTH__ = { isAuthenticated: {{if .AuthInfo.IsAuthenticated}}true{{else}}false{{end}}, username: {{if .AuthInfo.Username}}"{{.AuthInfo.Username}}"{{else}}""{{end}} };</script>
+</body>
+</html>

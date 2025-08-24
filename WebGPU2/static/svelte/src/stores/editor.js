@@ -36,6 +36,13 @@ export function updateScriptCode(id, code) {
   }));
 }
 
+export function updateScriptBuffer(id, buffer) {
+  editorState.update(s => ({
+    ...s,
+    scripts: s.scripts.map(sc => sc.id === id ? { ...sc, buffer } : sc)
+  }));
+}
+
 export function replaceAllScripts(list) {
   editorState.update(s => ({ ...s, scripts: list, activeScriptId: list[0]?.id ?? null }));
 }

@@ -18,7 +18,48 @@
   function onSave(){ saveShader().catch(e=>addConsoleMessage(e.message,'error')); }
   function onCompile(){ compileActive().catch(e=>addConsoleMessage(e.message,'error')); }
 
-  onMount(() => { initWorkspace(); });
+  // Resizable panes functionality
+  let leftPaneWidth = 60; // percentage
+  let isResizing = false;
+  let layoutRef;
+
+  function startResize(e) {
+    isResizing = true;
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  }
+
+  function handleResize(e) {
+    if (!isResizing || !layoutRef) return;
+    
+    const rect = layoutRef.getBoundingClientRect();
+    const newLeftWidth = ((e.clientX - rect.left) / rect.width) * 100;
+    
+    // Constrain between 20% and 80%
+    leftPaneWidth = Math.max(20, Math.min(80, newLeftWidth));
+  }
+
+  function stopResize() {
+    isResizing = false;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+
+  onMount(() => { 
+    initWorkspace();
+    
+    // Cleanup on component destroy
+    return () => {
+      if (isResizing) {
+        stopResize();
+      }
+    };
+  });
 </script>
 
 <div class="svelte-editor" data-initializing={$initializing}>
@@ -33,12 +74,20 @@
       <button on:click={onCompile} disabled={$initializing}>Compile</button>
     </div>
   </header>
-  <div class="layout">
-    <div class="left-pane">
+  
+  <div class="layout" bind:this={layoutRef}>
+    <div class="left-pane" style="width: {leftPaneWidth}%;">
       <ScriptTabs />
       <CodeEditor script={$script} on:updateCode={(e)=>updateScriptCode(e.detail.id,e.detail.code)} />
     </div>
-    <div class="right-pane">
+    
+    <div class="resize-handle" 
+         on:mousedown={startResize}
+         class:resizing={isResizing}>
+      <div class="resize-line"></div>
+    </div>
+    
+    <div class="right-pane" style="width: {100 - leftPaneWidth}%;">
       <PreviewPanel />
       <ConsolePanel />
     </div>
@@ -46,85 +95,93 @@
 </div>
 
 <style>
-  .svelte-editor { display:flex; flex-direction:column; gap:.75rem; }
-  .editor-bar { display:flex; justify-content:space-between; align-items:center; }
-  .layout { display:flex; gap:1rem; }
-  .left-pane { flex:1; display:flex; flex-direction:column; }
-  .right-pane { width:420px; display:flex; flex-direction:column; gap:.75rem; }
-  textarea { width:100%; height:400px; font-family: monospace; }
-
-  .editor-page {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 1rem;
+  .svelte-editor { 
+    display: flex; 
+    flex-direction: column; 
+    gap: .75rem; 
+    height: 100vh;
+    max-height: calc(100vh - 200px);
   }
-
-  .editor-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: white;
-    padding: 1.5rem 2rem;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    margin-bottom: 2rem;
+  
+  .editor-bar { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    flex-shrink: 0;
   }
-
-  .shader-title {
-    font-size: 1.5rem;
-    margin: 0;
-    color: #2d3748;
-    border: none;
-    background: none;
-    font-weight: 600;
+  
+  .layout { 
+    display: flex; 
+    flex: 1;
+    min-height: 400;
+    position: relative;
   }
-
-  .shader-title:focus {
-    outline: 2px solid #667eea;
-    border-radius: 5px;
-    padding: 0.25rem;
-  }
-
-  .editor-actions {
-    display: flex;
-    gap: 1rem;
-  }
-
-  .editor-layout {
-    display: grid;
-    grid-template-columns: 300px 1fr;
-    gap: 2rem;
-    margin-bottom: 2rem;
-  }
-
-  .editor-main-container {
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  
+  .left-pane { 
+    display: flex; 
+    flex-direction: column;
+    min-width: 300px;
     overflow: hidden;
-    min-height: 600px;
+  }
+  
+  .right-pane { 
+    display: flex; 
+    flex-direction: column; 
+    gap: .75rem;
+    min-width: 300px;
+    overflow: hidden;
   }
 
+  /* Resizable handle styles */
+  .resize-handle {
+    width: 8px;
+    background-color: #e2e8f0;
+    cursor: col-resize;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+  }
+
+  .resize-handle:hover,
+  .resize-handle.resizing {
+    background-color: #cbd5e0;
+  }
+
+  .resize-line {
+    width: 2px;
+    height: 30px;
+    background-color: #a0aec0;
+    border-radius: 1px;
+  }
+
+  /* Responsive design - disable resizing on smaller screens */
   @media (max-width: 1024px) {
-    .editor-layout {
-      grid-template-columns: 1fr;
-      gap: 1rem;
+    .layout {
+      flex-direction: column;
+    }
+    
+    .left-pane,
+    .right-pane {
+      width: 100% !important;
+    }
+    
+    .resize-handle {
+      display: none;
     }
   }
 
   @media (max-width: 768px) {
-    .editor-page {
-      padding: 0 1rem;
+    .svelte-editor {
+      gap: 0.5rem;
     }
     
-    .editor-header {
+    .editor-bar {
       flex-direction: column;
       gap: 1rem;
-      text-align: center;
-    }
-    
-    .editor-actions {
-      justify-content: center;
+      align-items: stretch;
     }
   }
 </style>

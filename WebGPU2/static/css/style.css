@@ -15,7 +15,7 @@ body {
 /* Global Layout Styles */
 .main-content {
     min-height: calc(100vh - 140px);
-    padding: 2rem 0;
+    padding: 1rem 1rem;
 }
 
 .container {
@@ -209,9 +209,5 @@ body {
 
     .nav-menu {
         gap: 1rem;
-    }
-
-    .main-content {
-        padding: 1rem 0;
     }
 }
