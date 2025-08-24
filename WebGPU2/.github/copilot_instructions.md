@@ -1,477 +1,347 @@
-# Frontend MVC Refactoring Guidelines - Copilot Instructions
+# WebGPU Shader Editor Frontend Architecture
 
-## Project Overview
-This WebGPU shader application needs to be refactored from a monolithic frontend structure into a clean MVC-style component architecture. The goal is to improve maintainability, testability, and reusability without adding new features.
+## Overview
+A WebGPU shader editor that allows users to write shaders with configurable buffer outputs and visualize/sample those buffers across scripts with clean separation of concerns.
 
-## Current Architecture Issues
-- Monolithic `app.js` with mixed responsibilities
-- HTML templates tightly coupled with JavaScript
-- Direct DOM manipulation scattered throughout code
-- No separation between data access, business logic, and presentation
-- Global variables and functions creating namespace pollution
+## Backend Integration Notes
 
-## Target Architecture: MVC Components
+### Data Models
+All data models are defined in `/Users/daniel/Repositories/WebGPU/WebGPU2/internal/models/types.go`:
+- `User` - User authentication and identification
+- `Tag` - Shader categorization tags
+- `BufferSpec` - Buffer configuration (format, width, height) per script
+- `ShaderScript` - Individual shader code with buffer specification
+- `Shader` - Complete shader with multiple scripts, tags, and metadata
+- `SearchParams` - Parameters for shader searching and filtering
 
-### Directory Structure
-```
-static/js/
-├── services/          # API layer (Model)
-│   ├── api.js        # Base API utilities
-│   ├── ShaderAPI.js  # Shader-specific API calls
-│   ├── TagAPI.js     # Tag-specific API calls
-│   └── UserAPI.js    # User/auth API calls
-├── models/           # Data models
-│   ├── Shader.js     # Shader data model
-│   ├── User.js       # User data model
-│   └── Tag.js        # Tag data model
-├── components/       # View Components
-│   ├── BaseComponent.js
-│   ├── NotificationComponent.js
-│   ├── BrowsePageComponent.js
-│   ├── SearchComponent.js
-│   ├── EditorPageComponent.js
-│   ├── CodeEditorComponent.js
-│   ├── ShaderPropertiesComponent.js
-│   ├── PreviewComponent.js
-│   └── LoginComponent.js
-├── controllers/      # Controllers
-│   ├── AppController.js
-│   └── Router.js
-└── utils/           # Utilities
-    ├── dom.js       # DOM manipulation helpers
-    └── validation.js # Form validation utilities
+### API Endpoints
+Backend API handlers are in `/Users/daniel/Repositories/WebGPU/WebGPU2/internal/handlers/api.go`:
+- `GET /api/shaders` - Get all shaders with optional search parameters
+- `GET /api/shaders/{id}` - Get specific shader by ID
+- `POST /api/shaders` - Create new shader (requires authentication)
+- `PUT /api/shaders/{id}` - Update existing shader (requires authentication)
+- `DELETE /api/shaders/{id}` - Delete shader (requires authentication)
+- `GET /api/tags` - Get all available tags
+- `POST /api/login` - User authentication
+- `POST /api/logout` - User logout
 
-templates/components/ # Component HTML templates
-├── search-component.html
-├── browse-page.html
-├── editor-page.html
-├── code-editor.html
-├── shader-properties.html
-├── preview-panel.html
-└── login-modal.html
-```
+### Authentication
+- Session-based authentication using HTTP cookies
+- `X-User-ID` and `X-Username` headers added by auth middleware
+- Login required for create/update/delete operations
 
-## Phase 1: API Service Layer (Model)
-
-### Create Base API Service
-**File**: `static/js/services/api.js`
-
+### Data Structure Example
 ```javascript
-class APIService {
-    constructor(baseURL = '/api') {
-        this.baseURL = baseURL;
+// Complete shader object structure
+{
+  "id": 1,
+  "user_id": 1,
+  "name": "My Shader",
+  "author": "username",
+  "shader_scripts": [
+    {
+      "id": 1,
+      "code": "// WGSL shader code here",
+      "buffer": {
+        "format": "rgba8unorm",
+        "width": 512,
+        "height": 512
+      }
     }
-
-    async request(endpoint, options = {}) {
-        // Handle authentication, error responses, loading states
-        // Return consistent data structures
-        // Log API calls for debugging
-    }
-
-    async get(endpoint, params = {}) { }
-    async post(endpoint, data) { }
-    async put(endpoint, data) { }
-    async delete(endpoint) { }
+  ],
+  "tags": [
+    { "id": 1, "name": "fragment" },
+    { "id": 2, "name": "animation" }
+  ]
 }
 ```
 
-**Guidelines**:
-- All fetch operations must go through API services
-- Handle authentication automatically
-- Standardize error responses
-- Include loading states
-- Add request/response logging
-- Use consistent naming conventions
+## Core Architecture Principles
+- **Single Responsibility**: Each module handles one specific concern
+- **Dependency Injection**: Pass dependencies explicitly to avoid tight coupling
+- **Event-Driven**: Use events for loose coupling between components
+- **Immutable State**: Avoid direct state mutation where possible
+- **Small Functions**: Keep functions focused and under 20 lines
+- **Top-Level API**: Simple interface for page logic to interact with the system
 
-### Create Specialized API Services
-**Files**: `ShaderAPI.js`, `TagAPI.js`, `UserAPI.js`
+## Module Structure
+
+### 1. WebGPU Core Module (`webgpu-core.js`)
+**Responsibility**: Low-level WebGPU device and resource management
 
 ```javascript
-class ShaderAPI extends APIService {
-    async getShaders(params = {}) { }
-    async getShader(id) { }
-    async createShader(shaderData) { }
-    async updateShader(id, shaderData) { }
-    async deleteShader(id) { }
-    async updateShaderProperties(id, properties) { }
+class WebGPUCore {
+  // Device initialization and capability detection
+  async initDevice(options = {})
+  getDevice()
+  getCapabilities()
+  
+  // Resource creation utilities
+  createBuffer(descriptor)
+  createTexture(descriptor) 
+  createBindGroup(descriptor)
+  createRenderPipeline(descriptor)
+  createComputePipeline(descriptor)
+  
+  // Command submission
+  submitCommands(commands)
 }
 ```
 
-**Guidelines**:
-- One API class per domain entity
-- Methods should match backend endpoints
-- Include parameter validation
-- Handle specific error cases
-- Return domain-specific data models
-
-## Phase 2: Data Models
-
-### Create Data Models
-**Files**: `models/Shader.js`, `models/User.js`, `models/Tag.js`
+### 2. Shader Compiler Module (`shader-compiler.js`)
+**Responsibility**: WGSL compilation and validation
 
 ```javascript
-class Shader {
-    constructor(data = {}) {
-        this.id = data.id || null;
-        this.name = data.name || '';
-        this.shaderScripts = data.shaderScripts || [];
-        this.tags = data.tags || [];
-        this.userId = data.userId || null;
-        this.createdAt = data.createdAt || null;
-    }
-
-    validate() { }
-    toJSON() { }
-    static fromJSON(json) { }
+class ShaderCompiler {
+  // Compilation and validation
+  async compileShader(source, type)
+  validateSyntax(source)
+  getCompileErrors()
+  
+  // Preprocessing
+  injectBufferBindings(source, bufferSpecs)
+  resolveIncludes(source, dependencies)
 }
 ```
 
-**Guidelines**:
-- Include data validation
-- Provide serialization methods
-- Add business logic methods
-- Use immutable patterns where possible
-- Include type checking
-
-## Phase 3: Component Architecture (View)
-
-### Base Component Class
-**File**: `components/BaseComponent.js`
+### 3. Buffer Manager Module (`buffer-manager.js`)
+**Responsibility**: Buffer lifecycle and inter-script sharing
 
 ```javascript
-class BaseComponent {
-    constructor(container, options = {}) {
-        this.container = container;
-        this.options = options;
-        this.state = {};
-        this.eventListeners = [];
-    }
-
-    init() { }
-    render() { }
-    destroy() { }
-    setState(newState) { }
-    addEventListener(element, event, handler) { }
-    removeAllEventListeners() { }
+class BufferManager {
+  // Buffer creation based on script specs
+  createScriptBuffer(scriptId, bufferSpec)
+  updateBufferSpec(scriptId, newSpec)
+  destroyScriptBuffer(scriptId)
+  
+  // Inter-script buffer access
+  getBufferReference(scriptId)
+  createBufferBinding(sourceScript, targetScript)
+  
+  // Buffer operations
+  readBuffer(scriptId, callback)
+  copyBuffer(sourceId, targetId)
+  clearBuffer(scriptId)
 }
 ```
 
-**Guidelines**:
-- All components extend BaseComponent
-- Use consistent lifecycle methods
-- Manage event listeners properly
-- Implement state management
-- Provide cleanup methods
-
-### Component Development Rules
-
-#### 1. Single Responsibility Principle
-Each component should handle ONE specific concern:
-- `SearchComponent`: Only search functionality
-- `CodeEditorComponent`: Only code editing
-- `NotificationComponent`: Only notifications
-
-#### 2. Component Communication
-```javascript
-// Good: Event-driven communication
-this.emit('shader-saved', { shader: shaderData });
-
-// Bad: Direct method calls between components
-otherComponent.updateData(data);
-```
-
-#### 3. State Management
-```javascript
-// Good: Centralized state
-class EditorPageComponent extends BaseComponent {
-    constructor(container, options) {
-        super(container, options);
-        this.state = {
-            currentShader: null,
-            isDirty: false,
-            activeTab: 0
-        };
-    }
-}
-
-// Bad: Global variables
-window.currentShader = shader;
-```
-
-#### 4. Template Integration
-```javascript
-// Good: Use data attributes for component initialization
-<div class="shader-editor" data-component="editor" data-shader-id="123">
-
-// JavaScript
-document.querySelectorAll('[data-component="editor"]').forEach(el => {
-    new EditorComponent(el, { shaderId: el.dataset.shaderId });
-});
-```
-
-### Specific Component Guidelines
-
-#### SearchComponent
-- Make it reusable across browse and my-shaders pages
-- Support different search configurations
-- Emit events for search state changes
-- Handle URL parameter synchronization
-
-#### EditorPageComponent
-- Coordinate between sub-components (code editor, properties, preview)
-- Manage overall editor state
-- Handle save/create operations
-- Warn about unsaved changes
-
-#### CodeEditorComponent
-- Manage multiple shader script tabs
-- Handle syntax highlighting
-- Provide auto-save functionality
-- Emit code change events
-
-#### ShaderPropertiesComponent
-- Enhance existing component with better architecture
-- Make it more reusable
-- Improve state management
-- Add better validation
-
-## Phase 4: Controllers
-
-### Application Controller
-**File**: `controllers/AppController.js`
+### 4. Script Execution Engine (`script-engine.js`)
+**Responsibility**: Shader execution and render/compute dispatch
 
 ```javascript
-class AppController {
-    constructor() {
-        this.router = new Router();
-        this.components = new Map();
-        this.services = {
-            shader: new ShaderAPI(),
-            tag: new TagAPI(),
-            user: new UserAPI()
-        };
-    }
-
-    init() {
-        this.setupRoutes();
-        this.initializeGlobalComponents();
-        this.router.start();
-    }
+class ScriptEngine {
+  // Script lifecycle
+  createScript(config)
+  updateScript(scriptId, newConfig)
+  destroyScript(scriptId)
+  
+  // Execution control
+  executeScript(scriptId, inputs = {})
+  executeAllScripts()
+  setExecutionOrder(scriptIds)
+  
+  // Real-time execution
+  startRealTimeExecution(scriptId)
+  stopRealTimeExecution(scriptId)
+  setFrameRate(fps)
 }
 ```
 
-**Guidelines**:
-- Centralize application initialization
-- Manage component lifecycle
-- Handle global state
-- Coordinate between services and components
-
-### Router
-**File**: `controllers/Router.js`
+### 5. Visualization Engine (`visualization-engine.js`)
+**Responsibility**: Rendering buffers to canvas/UI elements
 
 ```javascript
-class Router {
-    constructor() {
-        this.routes = new Map();
-    }
-
-    addRoute(pattern, handler) { }
-    navigate(path) { }
-    start() { }
+class VisualizationEngine {
+  // Visualization modes
+  renderBufferAsTexture(bufferId, canvas, options)
+  renderBufferAsGraph(bufferId, canvas, options)
+  renderBufferAsHeatmap(bufferId, canvas, options)
+  
+  // Sampling and inspection
+  sampleBuffer(bufferId, coordinates)
+  getBufferStatistics(bufferId)
+  createBufferInspector(bufferId, container)
+  
+  // Export utilities
+  exportBufferAsImage(bufferId, format)
+  exportBufferAsData(bufferId, format)
 }
 ```
 
-## Phase 5: Implementation Strategy
+### 6. Code Editor Integration (`editor-integration.js`)
+**Responsibility**: Monaco/CodeMirror integration with WebGPU features
 
-### Step-by-Step Refactoring Order
-
-1. **Start with API Services**
-   - Extract all fetch calls from `app.js`
-   - Create `APIService` base class
-   - Create specialized services
-   - Test API integration
-
-2. **Create Data Models**
-   - Extract data structures
-   - Add validation logic
-   - Test model functionality
-
-3. **Extract Notification System**
-   - Move from `app.js` to `NotificationComponent`
-   - Make it globally accessible
-   - Test notification display
-
-4. **Refactor Authentication**
-   - Move login.js to `LoginComponent`
-   - Integrate with API services
-   - Test login/logout flow
-
-5. **Extract Search Functionality**
-   - Enhance existing `search.js`
-   - Make it more reusable
-   - Test search functionality
-
-6. **Create Page Components**
-   - Extract browse page logic
-   - Extract editor page logic
-   - Test page functionality
-
-7. **Create Editor Sub-components**
-   - Code editor component
-   - Properties component (enhance existing)
-   - Preview component
-   - Test editor functionality
-
-8. **Create Application Controller**
-   - Replace main `app.js` logic
-   - Implement routing
-   - Test overall application
-
-### Migration Guidelines
-
-#### Before Starting Any Component
 ```javascript
-// 1. Identify current functionality
-// 2. List all dependencies
-// 3. Plan component interface
-// 4. Write component tests
-// 5. Implement component
-// 6. Replace old code
-// 7. Test integration
-```
-
-#### Code Quality Standards
-```javascript
-// Good: Descriptive names
-class ShaderCodeEditorComponent extends BaseComponent {
-    handleTabSwitch(activeTabIndex) { }
-}
-
-// Bad: Generic names
-class Editor {
-    switch(index) { }
+class EditorIntegration {
+  // Editor setup
+  initializeEditor(container, options)
+  setLanguageSupport(language)
+  configureTheme(theme)
+  
+  // WebGPU-specific features
+  addBufferAutocompletion(availableBuffers)
+  addSyntaxValidation(validator)
+  addErrorHighlighting(errors)
+  
+  // Code analysis
+  findBufferReferences(code)
+  suggestOptimizations(code)
+  formatCode(code)
 }
 ```
 
-#### Error Handling
+### 7. State Management (`state-manager.js`)
+**Responsibility**: Application state and change tracking
+
 ```javascript
-// Good: Specific error handling
-try {
-    const shader = await this.shaderAPI.getShader(id);
-    this.setState({ shader });
-} catch (error) {
-    if (error.status === 404) {
-        this.showError('Shader not found');
-    } else {
-        this.showError('Failed to load shader');
-    }
+class StateManager {
+  // State operations
+  getState()
+  setState(newState)
+  patchState(changes)
+  
+  // Change tracking
+  subscribe(path, callback)
+  unsubscribe(path, callback)
+  getHistory()
+  
+  // Persistence
+  saveState()
+  loadState()
+  resetToDefault()
 }
+```
 
-// Bad: Generic error handling
-try {
-    // operation
-} catch (error) {
-    console.log(error);
+### 8. Top-Level API (`shader-workspace.js`)
+**Responsibility**: Main interface for page logic
+
+```javascript
+class ShaderWorkspace {
+  constructor(container, options = {})
+  
+  // High-level operations
+  async createNewShader(name, type)
+  async loadShader(shaderId)
+  async saveShader()
+  
+  // Script management
+  addScript(type, bufferSpec)
+  removeScript(scriptId)
+  updateScriptCode(scriptId, code)
+  updateScriptBuffer(scriptId, bufferSpec)
+  
+  // Execution control
+  runScript(scriptId)
+  runAllScripts()
+  stopExecution()
+  
+  // Visualization
+  showBufferVisualization(scriptId, mode)
+  hideBufferVisualization(scriptId)
+  exportBuffer(scriptId, format)
+  
+  // Events
+  on(event, callback)
+  off(event, callback)
 }
 ```
 
-#### Event Naming Convention
-```javascript
-// Good: Descriptive event names
-this.emit('shader:saved', { id, name });
-this.emit('editor:code-changed', { tabIndex, code });
-this.emit('search:filters-applied', { query, tags });
+## Data Flow Architecture
 
-// Bad: Generic event names
-this.emit('save', data);
-this.emit('change', value);
-```
+### Script Configuration Flow
+1. User edits script properties → State Manager
+2. State Manager validates changes → Buffer Manager  
+3. Buffer Manager updates WebGPU resources → Script Engine
+4. Script Engine recompiles if needed → Visualization Engine
 
-## Phase 6: Testing Strategy
+### Execution Flow
+1. Script Engine dispatches compute/render → WebGPU Core
+2. WebGPU Core executes on GPU → Buffer Manager
+3. Buffer Manager notifies completion → Visualization Engine
+4. Visualization Engine updates displays → UI Components
 
-### Component Testing
-```javascript
-// Each component should have tests
-describe('SearchComponent', () => {
-    let component;
-    
-    beforeEach(() => {
-        const container = document.createElement('div');
-        component = new SearchComponent(container);
-    });
-    
-    afterEach(() => {
-        component.destroy();
-    });
-    
-    it('should emit search event when form is submitted', () => {
-        // Test implementation
-    });
-});
-```
+### Inter-Script Communication
+1. Script A writes to buffer → Buffer Manager
+2. Buffer Manager makes buffer available → Script B
+3. Script B reads buffer as input → Script Engine
+4. Changes propagate through dependency graph → All dependent scripts
 
-### Integration Testing
-- Test component communication
-- Test API service integration
-- Test state management
+## Error Handling Strategy
 
-## Phase 7: Documentation Requirements
+### Compilation Errors
+- Catch WGSL compilation errors
+- Provide line-by-line error mapping
+- Suggest fixes for common issues
+- Graceful fallback to previous working version
 
-### Component Documentation
-Each component must include:
-```javascript
-/**
- * SearchComponent - Handles shader search functionality
- * 
- * @class SearchComponent
- * @extends BaseComponent
- * 
- * Events Emitted:
- * - search:query-changed - When search query changes
- * - search:filters-applied - When filters are applied
- * 
- * Required DOM Structure:
- * <div class="search-component">
- *   <form class="search-form">
- *     <input class="search-input" />
- *   </form>
- * </div>
- */
-```
+### Runtime Errors
+- WebGPU device lost handling
+- Buffer allocation failures
+- Shader execution timeouts
+- Automatic error reporting to console module
 
-### API Documentation
-```javascript
-/**
- * Get shaders with optional filtering
- * @param {Object} params - Query parameters
- * @param {string} params.name - Name filter
- * @param {string[]} params.tags - Tag filters
- * @param {number} params.page - Page number
- * @returns {Promise<{shaders: Shader[], total: number}>}
- */
-async getShaders(params = {}) { }
-```
+### User Experience
+- Non-blocking error notifications
+- Detailed error information in console
+- Ability to continue working with other scripts
+- Auto-save before risky operations
 
-## Implementation Notes
+## Performance Considerations
 
-### Priority Rules
-1. **No new features** - Only refactoring existing functionality
-2. **Preserve all current behavior** - Users should notice no difference
-3. **Improve code organization** - Make it easier to maintain and extend
-4. **Add proper error handling** - Better user experience
-5. **Make components reusable** - Prepare for future features
+### Memory Management
+- Automatic buffer cleanup when scripts are destroyed
+- LRU cache for compiled shaders
+- Efficient buffer reuse for same dimensions/formats
+- Memory usage monitoring and warnings
 
-### Performance Considerations
-- Lazy load components when possible
-- Use event delegation for dynamic content
-- Minimize DOM queries
-- Cache API responses appropriately
-- Implement proper cleanup to prevent memory leaks
+### Execution Optimization
+- Dependency graph analysis to minimize redundant executions
+- Batch buffer operations where possible
+- Async execution with progress feedback
+- Configurable execution limits (time, memory)
 
-### Browser Compatibility
-- Support modern browsers (ES6+)
-- Use standard Web APIs
-- Avoid experimental features
-- Test in multiple browsers
+### UI Responsiveness
+- Worker threads for heavy compilation tasks
+- Incremental visualization updates
+- Debounced user input handling
+- Lazy loading of visualization components
 
-This refactoring will result in a much more maintainable, testable, and scalable frontend architecture while preserving all existing functionality.
+## Testing Strategy
+
+### Unit Tests
+- Each module tested in isolation
+- Mock WebGPU device for testing
+- Buffer operation verification
+- State management consistency
+
+### Integration Tests
+- End-to-end shader compilation and execution
+- Multi-script buffer sharing scenarios
+- Error handling across module boundaries
+- Performance benchmarks
+
+### User Acceptance Tests
+- Common shader development workflows
+- Visualization accuracy verification
+- Cross-browser compatibility
+- Accessibility compliance
+
+## Implementation Guidelines
+
+### Code Style
+- Use ES6+ features consistently
+- Prefer async/await over promises
+- Use TypeScript interfaces for complex objects
+- Follow naming conventions: camelCase for functions, PascalCase for classes
+
+### Error Messages
+- Provide actionable error messages
+- Include context about what the user was trying to do
+- Suggest specific fixes when possible
+- Link to documentation for complex issues
+
+### Documentation
+- JSDoc comments for all public methods
+- Usage examples for complex APIs
+- Architecture decision records for major choices
+- User guides for common workflows
