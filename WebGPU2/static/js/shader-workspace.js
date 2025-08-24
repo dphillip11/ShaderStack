@@ -46,6 +46,9 @@ class ShaderWorkspace {
             this.scriptEngine = new ScriptEngine(this.webgpuCore, this.shaderCompiler, this.bufferManager);
             this.visualizationEngine = new VisualizationEngine(this.webgpuCore, this.bufferManager);
 
+            // Make workspace available globally for CodeEditor debugging
+            window.__workspaceRef = this;
+
             // Setup event listeners
             this.setupEventListeners();
 
@@ -413,10 +416,16 @@ class ShaderWorkspace {
     showBufferVisualization(scriptId, mode = 'texture') {
         if (!this.isInitialized) return;
 
+        console.log('ShaderWorkspace: showBufferVisualization called with scriptId:', scriptId, 'mode:', mode);
+
         const canvas = this.container.querySelector('#webgpu-canvas');
-        if (!canvas) return;
+        if (!canvas) {
+            console.warn('ShaderWorkspace: No webgpu-canvas found');
+            return;
+        }
 
         try {
+            console.log('ShaderWorkspace: About to render buffer visualization...');
             switch (mode) {
                 case 'texture':
                     this.visualizationEngine.renderBufferAsTexture(scriptId, canvas);
@@ -429,10 +438,11 @@ class ShaderWorkspace {
                     break;
             }
 
+            console.log('ShaderWorkspace: Buffer visualization rendered successfully');
             this.dispatchEvent('visualizationUpdated', { scriptId, mode });
 
         } catch (error) {
-            console.error('Failed to show visualization:', error);
+            console.error('ShaderWorkspace: Failed to show visualization:', error);
             this.dispatchEvent('visualizationError', { scriptId, mode, error });
         }
     }
@@ -552,7 +562,7 @@ class ShaderWorkspace {
             fragment: `@fragment
 fn main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = fragCoord.xy / vec2<f32>(512.0, 512.0);
-    return vec4<f32>(uv, 0.5, 1.0);
+    return vec4<f32>(sin(uniforms.time), 0.5, 1.0, 1.0);
 }`,
             vertex: `@vertex
 fn main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
@@ -562,6 +572,10 @@ fn main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32>
 }`,
             compute: `@compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    // Access uniforms in compute shader
+    let time = uniforms.time;
+    let mouse = uniforms.mouse;
+    
     // Compute shader code here
 }`
         };
@@ -579,24 +593,50 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     }
 
     setupEventListeners() {
+        // Mouse tracking for uniforms
+        this.setupMouseTracking();
+
         // Auto-save on script updates
         this.scriptEngine.addEventListener('scriptUpdated', () => {
             this.scheduleAutoSave();
         });
 
-        // Log events for debugging
-        this.scriptEngine.addEventListener('scriptExecuted', (event) => {
-            const { detail } = event;
-            if (detail.success) {
-                console.log(`Script ${detail.scriptId} executed successfully`);
-            } else {
-                console.error(`Script ${detail.scriptId} execution failed:`, detail.error);
-                this.showConsoleMessage(`Error in script ${detail.scriptId}: ${detail.error.message}`, 'error');
-            }
+        // Enhanced error handling
+        this.scriptEngine.addEventListener('scriptError', (event) => {
+            console.warn('Script error:', event.detail);
+            this.handleScriptError(event.detail);
         });
+    }
 
-        this.visualizationEngine.addEventListener('bufferRendered', (event) => {
-            console.log(`Buffer ${event.detail.bufferId} rendered as ${event.detail.type}`);
+    setupMouseTracking() {
+        const canvas = this.container.querySelector('#webgpu-canvas');
+        if (!canvas) return;
+
+        const updateMousePosition = (event) => {
+            const rect = canvas.getBoundingClientRect();
+            
+            // Normalize mouse coordinates to [0, 1] range
+            // (0,0) at bottom-left, (1,1) at top-right
+            const mouseX = (event.clientX - rect.left) / rect.width;
+            const mouseY = 1.0 - (event.clientY - rect.top) / rect.height; // Flip Y for bottom-left origin
+            
+            // Clamp to [0, 1] range
+            const clampedX = Math.max(0, Math.min(1, mouseX));
+            const clampedY = Math.max(0, Math.min(1, mouseY));
+            
+            if (this.scriptEngine) {
+                this.scriptEngine.setMousePosition(clampedX, clampedY);
+            }
+        };
+
+        canvas.addEventListener('mousemove', updateMousePosition);
+        canvas.addEventListener('mouseenter', updateMousePosition);
+        
+        // Reset mouse position when leaving canvas
+        canvas.addEventListener('mouseleave', () => {
+            if (this.scriptEngine) {
+                this.scriptEngine.setMousePosition(0, 0);
+            }
         });
     }
 

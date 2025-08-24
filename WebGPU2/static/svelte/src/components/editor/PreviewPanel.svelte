@@ -25,13 +25,16 @@
     const currentWorkspace = getWorkspace();
     
     if (currentWorkspace && scriptId) {
-      console.log('Updating preview to show script:', scriptId);
+      console.log('PreviewPanel: Updating preview to show script:', scriptId);
       try {
         // Show the buffer output for the specified script in the preview canvas
         currentWorkspace.showBufferVisualization(scriptId, 'texture');
+        console.log('PreviewPanel: Successfully called showBufferVisualization for script:', scriptId);
       } catch (error) {
-        console.warn('Failed to update preview for script', scriptId, ':', error);
+        console.warn('PreviewPanel: Failed to update preview for script', scriptId, ':', error);
       }
+    } else {
+      console.log('PreviewPanel: No workspace or scriptId available', { workspace: !!currentWorkspace, scriptId });
     }
   }
   
@@ -41,10 +44,18 @@
     // Listen for script execution events
     if (workspace && workspace.scriptEngine) {
       const handleAllScriptsExecuted = () => {
+        console.log('PreviewPanel: handleAllScriptsExecuted fired');
         // After all scripts run, show the active script's output in the preview
         const currentState = $editorState;
+        console.log('PreviewPanel: Current editor state:', currentState);
+        console.log('PreviewPanel: Active script ID:', currentState.activeScriptId);
+        
         if (currentState.activeScriptId) {
-          setTimeout(() => updatePreviewForActiveScript(currentState.activeScriptId), 100);
+          console.log('PreviewPanel: Updating preview for real-time execution');
+          // During real-time execution, update immediately without delay
+          updatePreviewForActiveScript(currentState.activeScriptId);
+        } else {
+          console.warn('PreviewPanel: No active script ID found');
         }
       };
       

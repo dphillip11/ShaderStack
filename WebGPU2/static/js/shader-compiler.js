@@ -90,9 +90,11 @@ class ShaderCompiler {
     }
 
     injectBufferBindings(source, bufferSpecs) {
+        // Inject uniform bindings first (time at binding 0, mouse at binding 1)
+        let injectedSource = this.generateUniformBinding() + '\n' + source;
+        
         // Inject buffer bindings based on available buffers from other scripts
-        let injectedSource = source;
-        let bindingIndex = 0;
+        let bindingIndex = 2; // Start at 2 since uniforms take bindings 0 and 1
 
         for (const [scriptId, bufferSpec] of bufferSpecs) {
             const bindingCode = this.generateBufferBinding(scriptId, bufferSpec, bindingIndex);
@@ -101,6 +103,13 @@ class ShaderCompiler {
         }
 
         return injectedSource;
+    }
+
+    generateUniformBinding() {
+        return `
+// Global uniforms as individual bindings (much simpler than struct)
+@group(0) @binding(0) var<uniform> time: f32;
+@group(0) @binding(1) var<uniform> mouse: vec2<f32>;`;
     }
 
     generateBufferBinding(scriptId, bufferSpec, bindingIndex) {

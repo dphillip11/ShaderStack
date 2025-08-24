@@ -11,24 +11,36 @@ class VisualizationEngine {
     }
 
     renderBufferAsTexture(bufferId, canvas, options = {}) {
+        console.log('VisualizationEngine: renderBufferAsTexture called with bufferId:', bufferId);
+        
         const bufferInfo = this.bufferManager.getBufferReference(bufferId);
         if (!bufferInfo) {
+            console.error('VisualizationEngine: Buffer not found:', bufferId);
             throw new Error(`Buffer ${bufferId} not found`);
         }
+
+        console.log('VisualizationEngine: Buffer info found:', bufferInfo);
 
         try {
             const device = this.webgpuCore.getDevice();
             const canvasFormat = this.webgpuCore.getCapabilities().preferredCanvasFormat;
 
+            console.log('VisualizationEngine: Device and canvas format obtained');
+
             // Use the WebGPU context that was already configured during initialization
             const context = this.webgpuCore.getContext();
             if (!context) {
+                console.error('VisualizationEngine: WebGPU context not available');
                 throw new Error('WebGPU context not available');
             }
+
+            console.log('VisualizationEngine: WebGPU context obtained');
 
             // Create render pipeline for texture display
             const pipeline = this.getOrCreateDisplayPipeline(canvasFormat);
             
+            console.log('VisualizationEngine: Display pipeline created');
+
             // Create bind group for the buffer texture
             const bindGroup = device.createBindGroup({
                 layout: pipeline.getBindGroupLayout(0),
@@ -37,6 +49,8 @@ class VisualizationEngine {
                     resource: bufferInfo.textureView
                 }]
             });
+
+            console.log('VisualizationEngine: Bind group created');
 
             // Render to canvas
             const encoder = device.createCommandEncoder();
@@ -49,12 +63,16 @@ class VisualizationEngine {
                 }]
             });
 
+            console.log('VisualizationEngine: Render pass created');
+
             renderPass.setPipeline(pipeline);
             renderPass.setBindGroup(0, bindGroup);
             renderPass.draw(6); // Two triangles for fullscreen quad
             renderPass.end();
 
             device.queue.submit([encoder.finish()]);
+
+            console.log('VisualizationEngine: Render commands submitted');
 
             this.visualizations.set(canvas, {
                 type: 'texture',
@@ -63,9 +81,10 @@ class VisualizationEngine {
             });
 
             this.dispatchEvent('bufferRendered', { bufferId, canvas, type: 'texture' });
+            console.log('VisualizationEngine: Buffer rendered successfully');
 
         } catch (error) {
-            console.error(`Failed to render buffer ${bufferId} as texture:`, error);
+            console.error(`VisualizationEngine: Failed to render buffer ${bufferId} as texture:`, error);
             throw error;
         }
     }

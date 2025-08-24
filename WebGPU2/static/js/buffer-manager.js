@@ -12,8 +12,15 @@ class BufferManager {
 
     createScriptBuffer(scriptId, bufferSpec) {
         try {
+            console.log(`Creating buffer for script ${scriptId} with spec:`, bufferSpec);
+            
             const device = this.webgpuCore.getDevice();
             const { format, width, height } = bufferSpec;
+
+            // Validate buffer spec
+            if (!format || !width || !height || width <= 0 || height <= 0) {
+                throw new Error(`Invalid buffer spec: ${JSON.stringify(bufferSpec)}`);
+            }
 
             // Calculate buffer size based on format
             const bytesPerPixel = this.getBytesPerPixel(format);
@@ -34,15 +41,29 @@ class BufferManager {
                 usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT
             });
 
+            const textureView = texture.createView({
+                label: `Script ${scriptId} texture view`,
+                format: this.getTextureFormat(format),
+                dimension: '2d'
+            });
+
             const bufferInfo = {
                 scriptId,
                 spec: bufferSpec,
                 buffer,
                 texture,
-                textureView: texture.createView(),
+                textureView,
                 size,
                 lastUpdated: Date.now()
             };
+
+            console.log(`Buffer created successfully for script ${scriptId}:`, {
+                scriptId,
+                spec: bufferSpec,
+                textureFormat: this.getTextureFormat(format),
+                size,
+                hasTextureView: !!textureView
+            });
 
             this.buffers.set(scriptId, bufferInfo);
             this.references.set(scriptId, new Set());

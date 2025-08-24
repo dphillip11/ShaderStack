@@ -1,4 +1,8 @@
 import { editorState, setInitializing, setRunning, setSaving, setError, setShader, replaceAllScripts, setActiveScript, addConsoleMessage, updateScriptCode, registerWorkspace } from '../stores/editor.js';
+import { writable } from 'svelte/store';
+
+// Real-time execution state
+export const isRealTimeRunning = writable(false);
 
 // Helper to access current state snapshot
 function getSnapshot() { let v; editorState.subscribe(s=>v=s)(); return v; }
@@ -157,7 +161,21 @@ export async function compileActive() {
   if (!script) return;
   try {
     ws.updateScriptCode(script.id, script.code);
-    await ws.shaderCompiler.compileShader(script.code);
+    
+    // Use the same injection process as the script engine
+    const availableBuffers = new Map();
+    if (ws.scriptEngine && ws.scriptEngine.scripts) {
+      for (const [scriptId, scriptData] of ws.scriptEngine.scripts) {
+        if (scriptId !== script.id) {
+          availableBuffers.set(scriptId, scriptData.bufferSpec);
+        }
+      }
+    }
+    
+    // Inject uniforms and buffer bindings like the script engine does
+    const enhancedCode = ws.shaderCompiler.injectBufferBindings(script.code, availableBuffers);
+    await ws.shaderCompiler.compileShader(enhancedCode);
+    
     addConsoleMessage('Compilation successful', 'success');
   } catch (e) { addConsoleMessage('Compilation failed: ' + e.message, 'error'); }
 }
@@ -178,6 +196,37 @@ export function addScript() {
     console.error('addScript failed:', e);
     addConsoleMessage('Failed to add script: ' + e.message, 'error');
   });
+}
+
+// Real-time execution functions
+export function startRealTime() {
+  const ws = getWorkspace();
+  if (!ws || !ws.scriptEngine) return;
+  
+  try {
+    // Sync script code before starting real-time execution
+    const s = getSnapshot();
+    s.scripts.forEach(sc => ws.updateScriptCode(sc.id, sc.code));
+    
+    ws.scriptEngine.startRealTimeExecution();
+    isRealTimeRunning.set(true);
+    addConsoleMessage('Real-time execution started', 'success');
+  } catch (e) {
+    addConsoleMessage('Failed to start real-time execution: ' + e.message, 'error');
+  }
+}
+
+export function stopRealTime() {
+  const ws = getWorkspace();
+  if (!ws || !ws.scriptEngine) return;
+  
+  try {
+    ws.scriptEngine.stopRealTimeExecution();
+    isRealTimeRunning.set(false);
+    addConsoleMessage('Real-time execution stopped', 'info');
+  } catch (e) {
+    addConsoleMessage('Failed to stop real-time execution: ' + e.message, 'error');
+  }
 }
 
 export function getWorkspace() { return window.__workspaceRef || registerGlobal(); }

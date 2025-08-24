@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { editorState, activeScript, addConsoleMessage, setActiveScript, updateScriptCode } from '../stores/editor.js';
-  import { initWorkspace, runAll, saveShader, compileActive } from '../adapters/workspaceAdapter.js';
+  import { initWorkspace, runAll, saveShader, compileActive, startRealTime, stopRealTime, isRealTimeRunning } from '../adapters/workspaceAdapter.js';
   import ScriptTabs from './editor/ScriptTabs.svelte';
   import CodeEditor from './editor/CodeEditor.svelte';
   import PreviewPanel from './editor/PreviewPanel.svelte';
@@ -13,10 +13,19 @@
   const saving = derived(state, $s => $s.saving);
   const running = derived(state, $s => $s.running);
   const initializing = derived(state, $s => $s.initializing);
+  const realTimeRunning = isRealTimeRunning;
 
   function onRun(){ runAll().catch(e=>addConsoleMessage(e.message,'error')); }
   function onSave(){ saveShader().catch(e=>addConsoleMessage(e.message,'error')); }
   function onCompile(){ compileActive().catch(e=>addConsoleMessage(e.message,'error')); }
+  
+  function onToggleRealTime() {
+    if ($realTimeRunning) {
+      stopRealTime();
+    } else {
+      startRealTime();
+    }
+  }
 
   // Resizable panes functionality
   let leftPaneWidth = 60; // percentage
@@ -72,6 +81,7 @@
       <button on:click={onSave} disabled={$saving || $initializing}>{$saving ? 'Saving…' : 'Save'}</button>
       <button on:click={onRun} disabled={$running || $initializing}>{$running ? 'Running…' : 'Run'}</button>
       <button on:click={onCompile} disabled={$initializing}>Compile</button>
+      <button on:click={onToggleRealTime} disabled={$initializing}>{$realTimeRunning ? 'Pause' : 'Play'}</button>
     </div>
   </header>
   

@@ -20,6 +20,88 @@ class ScriptEngine {
         this.retryCount = new Map(); // scriptId -> retry attempts
         this.maxRetries = 3;
         this.fallbackMode = false;
+        
+        // Uniform system
+        this.timeBuffer = null;
+        this.mouseBuffer = null;
+        this.uniformBindGroupLayout = null;
+        this.uniformBindGroup = null;
+        this.mousePosition = { x: 0, y: 0 };
+        this.initializeUniforms();
+    }
+
+    initializeUniforms() {
+        const device = this.webgpuCore.getDevice();
+        
+        // Create separate uniform buffers for time and mouse
+        // This avoids WebGPU's complex struct padding requirements
+        this.timeBuffer = device.createBuffer({
+            label: 'Time Uniform',
+            size: 16, // f32 with 16-byte alignment
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        
+        this.mouseBuffer = device.createBuffer({
+            label: 'Mouse Uniform', 
+            size: 16, // vec2<f32> with 16-byte alignment
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        
+        // Create bind group layout for individual uniform bindings
+        this.uniformBindGroupLayout = device.createBindGroupLayout({
+            label: 'Uniform Bind Group Layout',
+            entries: [
+                {
+                    binding: 0,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
+                    buffer: { type: 'uniform' },
+                },
+                {
+                    binding: 1,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
+                    buffer: { type: 'uniform' },
+                }
+            ],
+        });
+        
+        // Create bind group with separate buffers
+        this.uniformBindGroup = device.createBindGroup({
+            label: 'Uniform Bind Group',
+            layout: this.uniformBindGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: { buffer: this.timeBuffer },
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: this.mouseBuffer },
+                }
+            ],
+        });
+    }
+
+    updateUniforms() {
+        const device = this.webgpuCore.getDevice();
+        
+        // Update time buffer (f32)
+        const currentTime = Date.now() / 1000.0;
+        const timeData = new Float32Array([currentTime]);
+        device.queue.writeBuffer(this.timeBuffer, 0, timeData);
+        
+        // Debug: Log time updates during real-time execution
+        if (this.isRealTimeRunning) {
+            console.log('Time uniform updated:', currentTime.toFixed(3));
+        }
+        
+        // Update mouse buffer (vec2<f32>)
+        const mouseData = new Float32Array([this.mousePosition.x, this.mousePosition.y]);
+        device.queue.writeBuffer(this.mouseBuffer, 0, mouseData);
+    }
+
+    setMousePosition(x, y) {
+        this.mousePosition.x = x;
+        this.mousePosition.y = y;
     }
 
     createScript(config) {
@@ -240,10 +322,14 @@ class ScriptEngine {
         const device = this.webgpuCore.getDevice();
         const bufferInfo = this.bufferManager.getBufferReference(scriptId);
 
+        // Create explicit pipeline layout that includes our uniform buffer
+        const availableBuffers = this.getAvailableBuffers(scriptId);
+        const pipelineLayout = this.createPipelineLayout(availableBuffers);
+
         if (type === 'compute') {
             return device.createComputePipeline({
                 label: `Compute pipeline ${scriptId}`,
-                layout: 'auto',
+                layout: pipelineLayout,
                 compute: {
                     module: compilation.shaderModule,
                     entryPoint: 'main'
@@ -255,7 +341,7 @@ class ScriptEngine {
             
             return device.createRenderPipeline({
                 label: `Render pipeline ${scriptId}`,
-                layout: 'auto',
+                layout: pipelineLayout,
                 vertex: {
                     module: this.getFullscreenVertexShader(),
                     entryPoint: 'main'
@@ -275,13 +361,89 @@ class ScriptEngine {
         }
     }
 
+    createPipelineLayout(availableBuffers) {
+        const device = this.webgpuCore.getDevice();
+        
+        // Create bind group layout entries
+        const entries = [];
+        
+        // Add time uniform at binding 0
+        entries.push({
+            binding: 0,
+            visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
+            buffer: { type: 'uniform' },
+        });
+        
+        // Add mouse uniform at binding 1
+        entries.push({
+            binding: 1,
+            visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
+            buffer: { type: 'uniform' },
+        });
+        
+        // Add texture bindings for other scripts (starting at binding 2)
+        let bindingIndex = 2;
+        for (const [scriptId, bufferSpec] of availableBuffers) {
+            const sampleType = this.getTextureSampleType(bufferSpec.format);
+            
+            entries.push({
+                binding: bindingIndex,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                texture: {
+                    sampleType: sampleType,
+                    viewDimension: '2d',
+                    multisampled: false,
+                },
+            });
+            bindingIndex++;
+        }
+        
+        const bindGroupLayout = device.createBindGroupLayout({
+            label: 'Pipeline Bind Group Layout',
+            entries: entries
+        });
+        
+        return device.createPipelineLayout({
+            label: 'Pipeline Layout',
+            bindGroupLayouts: [bindGroupLayout]
+        });
+    }
+
+    getTextureSampleType(format) {
+        // Map texture formats to their correct sample types
+        const sampleTypeMap = {
+            'rgba8unorm': 'float',
+            'rgba16float': 'unfilterable-float',
+            'rgba32float': 'unfilterable-float',
+            'r32float': 'unfilterable-float',
+            'rg32float': 'unfilterable-float'
+        };
+        return sampleTypeMap[format] || 'float';
+    }
+
     async runPipeline(scriptId, pipeline, inputs) {
         const device = this.webgpuCore.getDevice();
         const bufferInfo = this.bufferManager.getBufferReference(scriptId);
         const script = this.scripts.get(scriptId);
 
-        // Create bind group with available buffers
+        if (!bufferInfo) {
+            throw new Error(`Buffer not found for script ${scriptId}`);
+        }
+
+        if (!bufferInfo.textureView) {
+            throw new Error(`TextureView not available for script ${scriptId}`);
+        }
+
+        // Update uniforms before execution
+        this.updateUniforms();
+
+        // Create bind group with available buffers and uniforms
         const bindGroup = this.createBindGroup(scriptId, pipeline);
+
+        if (!bindGroup) {
+            console.warn(`Skipping execution for script ${scriptId} due to invalid bind group`);
+            return;
+        }
 
         const encoder = device.createCommandEncoder();
 
@@ -322,35 +484,86 @@ class ScriptEngine {
 
     createBindGroup(scriptId, pipeline) {
         const device = this.webgpuCore.getDevice();
-        const bufferInfo = this.bufferManager.getBufferReference(scriptId);
         
-        // For simple shaders with no inputs, create a minimal bind group
         try {
-            const bindGroupLayout = pipeline.getBindGroupLayout(0);
+            const availableBuffers = this.getAvailableBuffers(scriptId);
             
-            // Create a simple bind group - many shaders don't need any bindings
+            // Create bind group layout entries that match createPipelineLayout
             const entries = [];
             
-            // Only add entries if the layout expects them
-            // For basic fragment shaders, we might not need any bindings
+            // Add time uniform at binding 0
+            entries.push({
+                binding: 0,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
+                buffer: { type: 'uniform' },
+            });
+            
+            // Add mouse uniform at binding 1
+            entries.push({
+                binding: 1,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
+                buffer: { type: 'uniform' },
+            });
+            
+            // Add texture bindings for other scripts (starting at binding 2)
+            let bindingIndex = 2;
+            for (const [scriptId, bufferSpec] of availableBuffers) {
+                const sampleType = this.getTextureSampleType(bufferSpec.format);
+                
+                entries.push({
+                    binding: bindingIndex,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                    texture: {
+                        sampleType: sampleType,
+                        viewDimension: '2d',
+                        multisampled: false,
+                    },
+                });
+                bindingIndex++;
+            }
+            
+            const bindGroupLayout = device.createBindGroupLayout({
+                label: 'Bind Group Layout',
+                entries: entries
+            });
+            
+            // Create bind group entries (resources)
+            const bindGroupEntries = [
+                {
+                    binding: 0,
+                    resource: { buffer: this.timeBuffer },
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: this.mouseBuffer },
+                }
+            ];
+            
+            // Add texture resources for other scripts (starting at binding 2)
+            bindingIndex = 2;
+            for (const [otherScriptId, bufferSpec] of availableBuffers) {
+                const bufferInfo = this.bufferManager.getBufferReference(otherScriptId);
+                if (bufferInfo && bufferInfo.textureView) {
+                    bindGroupEntries.push({
+                        binding: bindingIndex,
+                        resource: bufferInfo.textureView
+                    });
+                } else {
+                    console.warn(`Missing buffer or textureView for script ${otherScriptId}`);
+                    return null;
+                }
+                bindingIndex++;
+            }
+            
             const bindGroup = device.createBindGroup({
                 layout: bindGroupLayout,
-                entries: entries
+                entries: bindGroupEntries
             });
 
             return bindGroup;
         } catch (error) {
-            console.warn('Failed to create bind group, trying without entries:', error);
-            // Fallback: create bind group with no entries
-            try {
-                return device.createBindGroup({
-                    layout: pipeline.getBindGroupLayout(0),
-                    entries: []
-                });
-            } catch (fallbackError) {
-                console.error('Failed to create any bind group:', fallbackError);
-                throw fallbackError;
-            }
+            console.error('Failed to create bind group:', error);
+            throw error;
         }
     }
 
