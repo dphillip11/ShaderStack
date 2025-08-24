@@ -50,10 +50,8 @@ class ShaderPropertiesManager {
         this.lastModified = this.container.querySelector('#last-modified');
         this.nameFeedback = this.container.querySelector('#name-feedback');
         
-        // Buffer configuration elements
-        this.bufferFormatSelect = this.container.querySelector('#buffer-format');
-        this.bufferWidthInput = this.container.querySelector('#buffer-width');
-        this.bufferHeightInput = this.container.querySelector('#buffer-height');
+        // Buffer configuration elements (multiple scripts)
+        this.scriptBufferConfigs = this.container.querySelectorAll('.script-buffer-config');
     }
 
     setupEventListeners() {
@@ -93,18 +91,24 @@ class ShaderPropertiesManager {
             this.tagSuggestions.addEventListener('click', this.handleSuggestionClick.bind(this));
         }
 
-        // Buffer configuration inputs
-        if (this.bufferFormatSelect) {
-            this.bufferFormatSelect.addEventListener('change', this.handleBufferChange.bind(this));
-        }
-        if (this.bufferWidthInput) {
-            this.bufferWidthInput.addEventListener('input', this.handleBufferChange.bind(this));
-            this.bufferWidthInput.addEventListener('blur', this.validateBufferDimensions.bind(this));
-        }
-        if (this.bufferHeightInput) {
-            this.bufferHeightInput.addEventListener('input', this.handleBufferChange.bind(this));
-            this.bufferHeightInput.addEventListener('blur', this.validateBufferDimensions.bind(this));
-        }
+        // Buffer configuration inputs (multiple scripts)
+        this.scriptBufferConfigs.forEach((scriptConfig, index) => {
+            const formatSelect = scriptConfig.querySelector(`#buffer-format-${index}`);
+            const widthInput = scriptConfig.querySelector(`#buffer-width-${index}`);
+            const heightInput = scriptConfig.querySelector(`#buffer-height-${index}`);
+            
+            if (formatSelect) {
+                formatSelect.addEventListener('change', this.handleBufferChange.bind(this));
+            }
+            if (widthInput) {
+                widthInput.addEventListener('input', this.handleBufferChange.bind(this));
+                widthInput.addEventListener('blur', (e) => this.validateBufferDimensions(e, index));
+            }
+            if (heightInput) {
+                heightInput.addEventListener('input', this.handleBufferChange.bind(this));
+                heightInput.addEventListener('blur', (e) => this.validateBufferDimensions(e, index));
+            }
+        });
     }
 
     handleNameInput(event) {
@@ -168,18 +172,22 @@ class ShaderPropertiesManager {
         }
     }
 
-    validateBufferDimensions() {
-        const width = parseInt(this.bufferWidthInput?.value) || 0;
-        const height = parseInt(this.bufferHeightInput?.value) || 0;
+    validateBufferDimensions(event, scriptIndex) {
+        const scriptConfig = this.scriptBufferConfigs[scriptIndex];
+        const widthInput = scriptConfig.querySelector(`#buffer-width-${scriptIndex}`);
+        const heightInput = scriptConfig.querySelector(`#buffer-height-${scriptIndex}`);
+        
+        const width = parseInt(widthInput?.value) || 0;
+        const height = parseInt(heightInput?.value) || 0;
         
         if (width < 1 || width > 4096) {
-            this.showNotification('Width must be between 1 and 4096', 'warning');
-            if (this.bufferWidthInput) this.bufferWidthInput.value = Math.max(1, Math.min(4096, width));
+            this.showNotification(`Script ${scriptIndex} width must be between 1 and 4096`, 'warning');
+            if (widthInput) widthInput.value = Math.max(1, Math.min(4096, width));
         }
         
         if (height < 1 || height > 4096) {
-            this.showNotification('Height must be between 1 and 4096', 'warning');
-            if (this.bufferHeightInput) this.bufferHeightInput.value = Math.max(1, Math.min(4096, height));
+            this.showNotification(`Script ${scriptIndex} height must be between 1 and 4096`, 'warning');
+            if (heightInput) heightInput.value = Math.max(1, Math.min(4096, height));
         }
         
         return width >= 1 && width <= 4096 && height >= 1 && height <= 4096;
@@ -308,18 +316,46 @@ class ShaderPropertiesManager {
     }
 
     getCurrentBufferSpec() {
-        return {
-            format: this.bufferFormatSelect?.value || 'rgba8unorm',
-            width: parseInt(this.bufferWidthInput?.value) || 512,
-            height: parseInt(this.bufferHeightInput?.value) || 512
-        };
+        const bufferSpecs = [];
+        
+        this.scriptBufferConfigs.forEach((scriptConfig, index) => {
+            const formatSelect = scriptConfig.querySelector(`#buffer-format-${index}`);
+            const widthInput = scriptConfig.querySelector(`#buffer-width-${index}`);
+            const heightInput = scriptConfig.querySelector(`#buffer-height-${index}`);
+            
+            bufferSpecs.push({
+                format: formatSelect?.value || 'rgba8unorm',
+                width: parseInt(widthInput?.value) || 512,
+                height: parseInt(heightInput?.value) || 512
+            });
+        });
+        
+        return bufferSpecs;
     }
 
     getCurrentData() {
+        const shaderScripts = [];
+        
+        this.scriptBufferConfigs.forEach((scriptConfig, index) => {
+            const formatSelect = scriptConfig.querySelector(`#buffer-format-${index}`);
+            const widthInput = scriptConfig.querySelector(`#buffer-width-${index}`);
+            const heightInput = scriptConfig.querySelector(`#buffer-height-${index}`);
+            
+            shaderScripts.push({
+                id: index,
+                code: '', // Code will be handled by the shader editor
+                buffer: {
+                    format: formatSelect?.value || 'rgba8unorm',
+                    width: parseInt(widthInput?.value) || 512,
+                    height: parseInt(heightInput?.value) || 512
+                }
+            });
+        });
+        
         return {
             name: this.nameInput?.value?.trim() || '',
             tags: this.getCurrentTags(),
-            buffer: this.getCurrentBufferSpec()
+            shaderScripts: shaderScripts
         };
     }
 
@@ -433,17 +469,26 @@ class ShaderPropertiesManager {
                 this.currentTagsContainer.appendChild(tagElement);
             });
             
-            // Restore buffer configuration
-            if (this.originalData.buffer) {
-                if (this.bufferFormatSelect) {
-                    this.bufferFormatSelect.value = this.originalData.buffer.format || 'rgba8unorm';
-                }
-                if (this.bufferWidthInput) {
-                    this.bufferWidthInput.value = this.originalData.buffer.width || 512;
-                }
-                if (this.bufferHeightInput) {
-                    this.bufferHeightInput.value = this.originalData.buffer.height || 512;
-                }
+            // Restore buffer configuration for all scripts
+            if (this.originalData.shaderScripts) {
+                this.scriptBufferConfigs.forEach((scriptConfig, index) => {
+                    const originalScript = this.originalData.shaderScripts[index];
+                    if (originalScript && originalScript.buffer) {
+                        const formatSelect = scriptConfig.querySelector(`#buffer-format-${index}`);
+                        const widthInput = scriptConfig.querySelector(`#buffer-width-${index}`);
+                        const heightInput = scriptConfig.querySelector(`#buffer-height-${index}`);
+                        
+                        if (formatSelect) {
+                            formatSelect.value = originalScript.buffer.format || 'rgba8unorm';
+                        }
+                        if (widthInput) {
+                            widthInput.value = originalScript.buffer.width || 512;
+                        }
+                        if (heightInput) {
+                            heightInput.value = originalScript.buffer.height || 512;
+                        }
+                    }
+                });
             }
             
             this.markClean();

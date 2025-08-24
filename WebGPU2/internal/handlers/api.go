@@ -190,30 +190,16 @@ func UpdateShader(w http.ResponseWriter, r *http.Request) {
         return
     }
     
-    // Use the same data structure as CreateShaderAPI
-    models.Shader shaderData;
-    
-    if err := json.NewDecoder(r.Body).Decode(&shaderData); err != nil {
+    // Use the existing Shader model directly
+    var shader models.Shader
+    if err := json.NewDecoder(r.Body).Decode(&shader); err != nil {
         http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
     
-    // Convert tags to proper format
-    tags := make([]models.Tag, len(shaderData.Tags))
-    for i, tag := range shaderData.Tags {
-        tags[i] = models.Tag{
-            ID:   i + 1,
-            Name: tag.Name,
-        }
-    }
-    
-    shader := models.Shader{
-        ID:            id,
-        UserID:        userID,
-        Name:          shaderData.Name,
-        ShaderScripts: shaderData.ShaderScripts,
-        Tags:          tags,
-    }
+    // Set the ID and UserID from the request
+    shader.ID = id
+    shader.UserID = userID
     
     updatedShader, err := data.GetRepository().UpdateShader(id, shader)
     if err != nil {
@@ -253,34 +239,15 @@ func CreateShaderAPI(w http.ResponseWriter, r *http.Request) {
         return
     }
     
-    var shaderData struct {
-        Name          string                 `json:"name"`
-        ShaderScripts []models.ShaderScript  `json:"shaderScripts"`
-        Tags          []struct {
-            Name string `json:"name"`
-        } `json:"tags"`
-    }
-    
-    if err := json.NewDecoder(r.Body).Decode(&shaderData); err != nil {
+    // Use the existing Shader model directly
+    var shader models.Shader
+    if err := json.NewDecoder(r.Body).Decode(&shader); err != nil {
         http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
     
-    // Convert tags to proper format
-    tags := make([]models.Tag, len(shaderData.Tags))
-    for i, tag := range shaderData.Tags {
-        tags[i] = models.Tag{
-            ID:   i + 1,
-            Name: tag.Name,
-        }
-    }
-    
-    shader := models.Shader{
-        UserID:        userID,
-        Name:          shaderData.Name,
-        ShaderScripts: shaderData.ShaderScripts,
-        Tags:          tags,
-    }
+    // Set the UserID from authentication
+    shader.UserID = userID
     
     createdShader, err := data.GetRepository().CreateShader(shader)
     if err != nil {

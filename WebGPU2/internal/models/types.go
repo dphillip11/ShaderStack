@@ -18,8 +18,8 @@ type BufferSpec struct {
 }
 
 type ShaderScript struct {
-    ID     int    `json:"id"`
-    Code   string `json:"code"`
+    ID     int        `json:"id"`
+    Code   string     `json:"code"`
     Buffer BufferSpec `json:"buffer"`
 }
 
