@@ -23,9 +23,9 @@ func main() {
     // API routes for shaders
     r.HandleFunc("/api/shaders", handlers.GetShaders).Methods("GET")
     r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.GetShader).Methods("GET")
-    r.HandleFunc("/api/shaders/new", handlers.AuthMiddleware(handlers.CreateShaderAPI)).Methods("POST")
-    r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.AuthMiddleware(handlers.UpdateShader)).Methods("PUT")
-    r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.AuthMiddleware(handlers.DeleteShader)).Methods("DELETE")
+    r.HandleFunc("/api/shaders/new", handlers.BlockingAuthMiddleware(handlers.CreateShaderAPI)).Methods("POST")
+    r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.BlockingAuthMiddleware(handlers.UpdateShader)).Methods("PUT")
+    r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.BlockingAuthMiddleware(handlers.DeleteShader)).Methods("DELETE")
     fmt.Println("API routes added...")
 
     // API routes for tags
@@ -40,7 +40,6 @@ func main() {
     r.HandleFunc("/", handlers.RenderBrowse).Methods("GET")
     r.HandleFunc("/my", handlers.AuthMiddleware(handlers.RenderMy)).Methods("GET")
     r.HandleFunc("/new", handlers.RenderEditor).Methods("GET")
-    r.HandleFunc("/sw", handlers.RenderSplitWindow).Methods("GET")
     r.HandleFunc("/{id:[0-9]+}", handlers.RenderEditor).Methods("GET")
     fmt.Println("Web routes added...")
 

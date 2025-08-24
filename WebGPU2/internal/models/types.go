@@ -1,7 +1,5 @@
 package models
 
-import "html/template"
-
 type User struct {
     ID       int    `json:"id"`
     Username string `json:"username"`
@@ -13,9 +11,16 @@ type Tag struct {
     Name string `json:"name"`
 }
 
+type BufferSpec struct {
+    Format   string `json:"format"`
+    Width    int    `json:"width"`
+    Height   int    `json:"height"`
+}
+
 type ShaderScript struct {
     ID     int    `json:"id"`
     Code   string `json:"code"`
+    Buffer BufferSpec `json:"buffer"`
 }
 
 type Shader struct {
@@ -56,17 +61,11 @@ type BrowsePageData struct {
     Shaders         []Shader
     AuthInfo        AuthenticationInfo
     SearchQuery     SearchParams
+    ShowLoginPrompt bool
 }
 
 type EditorPageData struct {
     AuthInfo        AuthenticationInfo
     Shader          Shader
     Author          string
-}
-
-type SplitWindowData struct {
-    AuthInfo        AuthenticationInfo
-    Vertical     bool
-    LeftContent  template.HTML
-    RightContent template.HTML
 }

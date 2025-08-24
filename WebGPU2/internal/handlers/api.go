@@ -101,7 +101,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // AuthMiddleware checks if user is authenticated
-func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func BlockingAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         cookie, err := r.Cookie("session_token")
         if (err != nil) {
@@ -191,13 +191,7 @@ func UpdateShader(w http.ResponseWriter, r *http.Request) {
     }
     
     // Use the same data structure as CreateShaderAPI
-    var shaderData struct {
-        Name          string                 `json:"name"`
-        ShaderScripts []models.ShaderScript  `json:"shaderScripts"`
-        Tags          []struct {
-            Name string `json:"name"`
-        } `json:"tags"`
-    }
+    models.Shader shaderData;
     
     if err := json.NewDecoder(r.Body).Decode(&shaderData); err != nil {
         http.Error(w, "Invalid request body", http.StatusBadRequest)

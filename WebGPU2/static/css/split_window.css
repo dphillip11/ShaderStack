@@ -1,29 +1,41 @@
-.split-window {
+/* Split Window Styles - Updated for Editor Layout */
+.resizable-layout {
     display: flex;
-    width: 100%;
     height: 100%;
-    overflow: hidden;
-    position: relative;
+    min-height: 600px;
     background: white;
     border-radius: 10px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     overflow: hidden;
-    min-height: 600px;
 }
 
-.split-window.horizontal {
-    flex-direction: row;
-}
-
-.split-window.vertical {
+.resizable-layout.vertical {
     flex-direction: column;
 }
 
-.split-window-pane {
-    flex-grow: 1;
-    overflow: auto;
+.resizable-layout.horizontal {
+    flex-direction: row;
 }
 
+/* Split window panes */
+.split-window-pane {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.1s ease-out, height 0.1s ease-out;
+}
+
+.split-window-pane.left {
+    flex: 1;
+    min-width: 300px;
+}
+
+.split-window-pane.right {
+    flex: 1;
+    min-width: 300px;
+}
+
+/* Resize handle */
 .resize-handle {
     width: 8px;
     background-color: #e2e8f0;
@@ -33,6 +45,7 @@
     align-items: center;
     justify-content: center;
     transition: background-color 0.2s;
+    flex-shrink: 0;
 }
 
 .resize-handle:hover {
@@ -40,23 +53,46 @@
 }
 
 .resize-line {
+    width: 2px;
+    height: 30px;
     background-color: #a0aec0;
     border-radius: 1px;
-    width: 2px;
-    height: 100%;
 }
 
-.split-window.horizontal .resize-handle {
-    width: 6px;
-    cursor: col-resize;
-}
-
-.split-window.vertical .resize-handle {
-    height: 6px;
+/* Vertical layout adjustments */
+.resizable-layout.vertical .resize-handle {
+    width: 100%;
+    height: 8px;
     cursor: row-resize;
 }
 
-.split-window.vertical .resize-line {
+.resizable-layout.vertical .resize-line {
+    width: 30px;
     height: 2px;
-    width: 100%;
+}
+
+/* Responsive behavior */
+@media (max-width: 1024px) {
+    .resizable-layout {
+        flex-direction: column !important;
+    }
+    
+    .resize-handle {
+        display: none;
+    }
+    
+    .split-window-pane {
+        min-height: 400px;
+    }
+}
+
+/* Ensure panes don't shrink below minimum */
+.split-window-pane.left,
+.split-window-pane.right {
+    box-sizing: border-box;
+}
+
+/* Fix for when width is set via JavaScript */
+.split-window-pane[style*="width"] {
+    flex: none !important;
 }

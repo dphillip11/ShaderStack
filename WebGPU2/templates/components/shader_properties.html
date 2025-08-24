@@ -35,6 +35,42 @@
     </div>
 
     <div class="property-group">
+        <label>Buffer Configuration</label>
+        <div class="buffer-config">
+            <div class="buffer-field">
+                <label for="buffer-format">Format</label>
+                <select id="buffer-format" class="buffer-format-select">
+                    <option value="rgba8unorm" {{if eq .Shader.ShaderScripts.Buffer.Format "rgba8unorm"}}selected{{end}}>RGBA8 Unorm</option>
+                    <option value="rgba16float" {{if eq .Shader.ShaderScripts.Buffer.Format "rgba16float"}}selected{{end}}>RGBA16 Float</option>
+                    <option value="rgba32float" {{if eq .Shader.ShaderScripts.Buffer.Format "rgba32float"}}selected{{end}}>RGBA32 Float</option>
+                    <option value="r32float" {{if eq .Shader.ShaderScripts.Buffer.Format "r32float"}}selected{{end}}>R32 Float</option>
+                    <option value="rg32float" {{if eq .Shader.ShaderScripts.Buffer.Format "rg32float"}}selected{{end}}>RG32 Float</option>
+                </select>
+            </div>
+            <div class="buffer-field">
+                <label for="buffer-width">Width</label>
+                <input type="number" 
+                       id="buffer-width" 
+                       class="buffer-width-input"
+                       value="{{if .Shader.ShaderScripts.Buffer.Width}}{{.Shader.ShaderScripts.Buffer.Width}}{{else}}512{{end}}"
+                       min="1"
+                       max="4096"
+                       placeholder="512">
+            </div>
+            <div class="buffer-field">
+                <label for="buffer-height">Height</label>
+                <input type="number" 
+                       id="buffer-height" 
+                       class="buffer-height-input"
+                       value="{{if .Shader.ShaderScripts.Buffer.Height}}{{.Shader.ShaderScripts.Buffer.Height}}{{else}}512{{end}}"
+                       min="1"
+                       max="4096"
+                       placeholder="512">
+            </div>
+        </div>
+    </div>
+
+    <div class="property-group">
         <label>Status</label>
         <div class="property-status">
             <span class="status-indicator" id="save-status">

@@ -3,6 +3,11 @@
 {{ end }}
 
 {{ define "Content" }}
+{{ if .ShowLoginPrompt }}
+<div class="login-banner">
+    <p>Please login to access additional features.</p>
+</div>
+{{ end }}
 <div class="browse-page">
     <!-- Search Component -->
     {{template "search.html" .}}

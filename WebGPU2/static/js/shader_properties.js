@@ -49,6 +49,11 @@ class ShaderPropertiesManager {
         this.statusText = this.container.querySelector('.status-text');
         this.lastModified = this.container.querySelector('#last-modified');
         this.nameFeedback = this.container.querySelector('#name-feedback');
+        
+        // Buffer configuration elements
+        this.bufferFormatSelect = this.container.querySelector('#buffer-format');
+        this.bufferWidthInput = this.container.querySelector('#buffer-width');
+        this.bufferHeightInput = this.container.querySelector('#buffer-height');
     }
 
     setupEventListeners() {
@@ -86,6 +91,19 @@ class ShaderPropertiesManager {
         // Tag suggestions clicks
         if (this.tagSuggestions) {
             this.tagSuggestions.addEventListener('click', this.handleSuggestionClick.bind(this));
+        }
+
+        // Buffer configuration inputs
+        if (this.bufferFormatSelect) {
+            this.bufferFormatSelect.addEventListener('change', this.handleBufferChange.bind(this));
+        }
+        if (this.bufferWidthInput) {
+            this.bufferWidthInput.addEventListener('input', this.handleBufferChange.bind(this));
+            this.bufferWidthInput.addEventListener('blur', this.validateBufferDimensions.bind(this));
+        }
+        if (this.bufferHeightInput) {
+            this.bufferHeightInput.addEventListener('input', this.handleBufferChange.bind(this));
+            this.bufferHeightInput.addEventListener('blur', this.validateBufferDimensions.bind(this));
         }
     }
 
@@ -136,6 +154,35 @@ class ShaderPropertiesManager {
         } else if (event.key === 'Escape') {
             this.hideSuggestions();
         }
+    }
+
+    handleBufferChange(event) {
+        this.markDirty();
+        
+        if (this.options.autoSave) {
+            this.scheduleAutoSave();
+        }
+        
+        if (this.options.onBufferChange) {
+            this.options.onBufferChange(this.getCurrentBufferSpec());
+        }
+    }
+
+    validateBufferDimensions() {
+        const width = parseInt(this.bufferWidthInput?.value) || 0;
+        const height = parseInt(this.bufferHeightInput?.value) || 0;
+        
+        if (width < 1 || width > 4096) {
+            this.showNotification('Width must be between 1 and 4096', 'warning');
+            if (this.bufferWidthInput) this.bufferWidthInput.value = Math.max(1, Math.min(4096, width));
+        }
+        
+        if (height < 1 || height > 4096) {
+            this.showNotification('Height must be between 1 and 4096', 'warning');
+            if (this.bufferHeightInput) this.bufferHeightInput.value = Math.max(1, Math.min(4096, height));
+        }
+        
+        return width >= 1 && width <= 4096 && height >= 1 && height <= 4096;
     }
 
     addCurrentTag() {
@@ -260,10 +307,19 @@ class ShaderPropertiesManager {
             .map(tag => ({ name: tag.dataset.tagName }));
     }
 
+    getCurrentBufferSpec() {
+        return {
+            format: this.bufferFormatSelect?.value || 'rgba8unorm',
+            width: parseInt(this.bufferWidthInput?.value) || 512,
+            height: parseInt(this.bufferHeightInput?.value) || 512
+        };
+    }
+
     getCurrentData() {
         return {
             name: this.nameInput?.value?.trim() || '',
-            tags: this.getCurrentTags()
+            tags: this.getCurrentTags(),
+            buffer: this.getCurrentBufferSpec()
         };
     }
 
@@ -376,6 +432,19 @@ class ShaderPropertiesManager {
                 const tagElement = this.createTagElement(tag.name);
                 this.currentTagsContainer.appendChild(tagElement);
             });
+            
+            // Restore buffer configuration
+            if (this.originalData.buffer) {
+                if (this.bufferFormatSelect) {
+                    this.bufferFormatSelect.value = this.originalData.buffer.format || 'rgba8unorm';
+                }
+                if (this.bufferWidthInput) {
+                    this.bufferWidthInput.value = this.originalData.buffer.width || 512;
+                }
+                if (this.bufferHeightInput) {
+                    this.bufferHeightInput.value = this.originalData.buffer.height || 512;
+                }
+            }
             
             this.markClean();
             this.clearNameFeedback();
