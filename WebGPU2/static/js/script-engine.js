@@ -1,0 +1,376 @@
+/**
+ * Script Execution Engine
+ * Handles shader execution and render/compute dispatch
+ */
+class ScriptEngine {
+    constructor(webgpuCore, shaderCompiler, bufferManager) {
+        this.webgpuCore = webgpuCore;
+        this.shaderCompiler = shaderCompiler;
+        this.bufferManager = bufferManager;
+        this.scripts = new Map(); // scriptId -> script config
+        this.pipelines = new Map(); // scriptId -> pipeline
+        this.executionOrder = [];
+        this.isRealTimeRunning = false;
+        this.frameRate = 60;
+        this.animationFrame = null;
+        this.eventTarget = new EventTarget();
+    }
+
+    createScript(config) {
+        const { id, code, bufferSpec, type = 'fragment' } = config;
+        
+        console.log('ScriptEngine.createScript called with:', { id, code: code?.substring(0, 50) + '...', bufferSpec, type });
+        
+        const script = {
+            id,
+            code,
+            bufferSpec,
+            type,
+            enabled: true,
+            lastExecuted: 0,
+            executionCount: 0
+        };
+
+        console.log('Script object created:', script);
+        
+        console.log('Adding script to scripts map...');
+        this.scripts.set(id, script);
+        console.log('Script added to map, now calling bufferManager.createScriptBuffer...');
+        
+        this.bufferManager.createScriptBuffer(id, bufferSpec);
+        console.log('Buffer created for script');
+        
+        this.dispatchEvent('scriptCreated', { scriptId: id, script });
+        console.log('ScriptEngine.createScript completed successfully');
+        return script;
+    }
+
+    updateScript(scriptId, newConfig) {
+        const script = this.scripts.get(scriptId);
+        if (!script) {
+            throw new Error(`Script ${scriptId} not found`);
+        }
+
+        // Update script configuration
+        Object.assign(script, newConfig);
+
+        // Update buffer if spec changed
+        if (newConfig.bufferSpec) {
+            this.bufferManager.updateBufferSpec(scriptId, newConfig.bufferSpec);
+        }
+
+        // Clear cached pipeline to force recompilation
+        this.pipelines.delete(scriptId);
+
+        this.dispatchEvent('scriptUpdated', { scriptId, script });
+    }
+
+    destroyScript(scriptId) {
+        this.scripts.delete(scriptId);
+        this.pipelines.delete(scriptId);
+        this.bufferManager.destroyScriptBuffer(scriptId);
+        
+        // Remove from execution order
+        this.executionOrder = this.executionOrder.filter(id => id !== scriptId);
+        
+        this.dispatchEvent('scriptDestroyed', { scriptId });
+    }
+
+    async executeScript(scriptId, inputs = {}) {
+        const script = this.scripts.get(scriptId);
+        if (!script || !script.enabled) {
+            return false;
+        }
+
+        try {
+            const pipeline = await this.getOrCreatePipeline(scriptId);
+            if (!pipeline) {
+                throw new Error(`Failed to create pipeline for script ${scriptId}`);
+            }
+
+            await this.runPipeline(scriptId, pipeline, inputs);
+            
+            script.lastExecuted = Date.now();
+            script.executionCount++;
+            
+            this.dispatchEvent('scriptExecuted', { scriptId, success: true });
+            return true;
+
+        } catch (error) {
+            console.error(`Failed to execute script ${scriptId}:`, error);
+            this.dispatchEvent('scriptExecuted', { scriptId, success: false, error });
+            throw error;
+        }
+    }
+
+    async executeAllScripts() {
+        const results = [];
+        
+        for (const scriptId of this.executionOrder) {
+            try {
+                await this.executeScript(scriptId);
+                results.push({ scriptId, success: true });
+            } catch (error) {
+                results.push({ scriptId, success: false, error });
+            }
+        }
+        
+        this.dispatchEvent('allScriptsExecuted', { results });
+        return results;
+    }
+
+    setExecutionOrder(scriptIds) {
+        this.executionOrder = [...scriptIds];
+        this.dispatchEvent('executionOrderChanged', { order: this.executionOrder });
+    }
+
+    startRealTimeExecution() {
+        if (this.isRealTimeRunning) return;
+        
+        this.isRealTimeRunning = true;
+        this.realTimeLoop();
+        this.dispatchEvent('realTimeStarted', {});
+    }
+
+    stopRealTimeExecution() {
+        this.isRealTimeRunning = false;
+        if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+            this.animationFrame = null;
+        }
+        this.dispatchEvent('realTimeStopped', {});
+    }
+
+    setFrameRate(fps) {
+        this.frameRate = Math.max(1, Math.min(120, fps));
+    }
+
+    async getOrCreatePipeline(scriptId) {
+        if (this.pipelines.has(scriptId)) {
+            return this.pipelines.get(scriptId);
+        }
+
+        const script = this.scripts.get(scriptId);
+        if (!script) return null;
+
+        try {
+            // Get available buffer bindings from other scripts
+            const availableBuffers = this.getAvailableBuffers(scriptId);
+            
+            // Inject buffer bindings into shader code
+            const enhancedCode = this.shaderCompiler.injectBufferBindings(
+                script.code, 
+                availableBuffers
+            );
+
+            // Compile shader
+            const compilation = await this.shaderCompiler.compileShader(enhancedCode, script.type);
+            
+            // Create pipeline based on shader type
+            const pipeline = await this.createPipelineForType(scriptId, compilation, script.type);
+            
+            this.pipelines.set(scriptId, pipeline);
+            return pipeline;
+
+        } catch (error) {
+            console.error(`Failed to create pipeline for script ${scriptId}:`, error);
+            return null;
+        }
+    }
+
+    async createPipelineForType(scriptId, compilation, type) {
+        const device = this.webgpuCore.getDevice();
+        const bufferInfo = this.bufferManager.getBufferReference(scriptId);
+
+        if (type === 'compute') {
+            return device.createComputePipeline({
+                label: `Compute pipeline ${scriptId}`,
+                layout: 'auto',
+                compute: {
+                    module: compilation.shaderModule,
+                    entryPoint: 'main'
+                }
+            });
+        } else {
+            // Fragment/vertex shader pipeline - use buffer's texture format, not canvas format
+            const bufferFormat = this.bufferManager.getTextureFormat(bufferInfo.spec.format);
+            
+            return device.createRenderPipeline({
+                label: `Render pipeline ${scriptId}`,
+                layout: 'auto',
+                vertex: {
+                    module: this.getFullscreenVertexShader(),
+                    entryPoint: 'main'
+                },
+                fragment: {
+                    module: compilation.shaderModule,
+                    entryPoint: 'main',
+                    targets: [{
+                        format: bufferFormat
+                    }]
+                }
+            });
+        }
+    }
+
+    async runPipeline(scriptId, pipeline, inputs) {
+        const device = this.webgpuCore.getDevice();
+        const bufferInfo = this.bufferManager.getBufferReference(scriptId);
+        const script = this.scripts.get(scriptId);
+
+        // Create bind group with available buffers
+        const bindGroup = this.createBindGroup(scriptId, pipeline);
+
+        const encoder = device.createCommandEncoder();
+
+        if (script.type === 'compute') {
+            // Compute shader execution
+            const computePass = encoder.beginComputePass();
+            computePass.setPipeline(pipeline);
+            computePass.setBindGroup(0, bindGroup);
+            
+            const workgroupSize = 8; // Common workgroup size
+            const dispatchX = Math.ceil(bufferInfo.spec.width / workgroupSize);
+            const dispatchY = Math.ceil(bufferInfo.spec.height / workgroupSize);
+            
+            computePass.dispatchWorkgroups(dispatchX, dispatchY);
+            computePass.end();
+        } else {
+            // Render shader execution - render to buffer texture with matching format
+            const renderPass = encoder.beginRenderPass({
+                colorAttachments: [{
+                    view: bufferInfo.textureView,
+                    clearValue: { r: 0, g: 0, b: 0, a: 1 },
+                    loadOp: 'clear',
+                    storeOp: 'store'
+                }]
+            });
+            
+            renderPass.setPipeline(pipeline);
+            renderPass.setBindGroup(0, bindGroup);
+            renderPass.draw(3); // Fullscreen triangle
+            renderPass.end();
+        }
+
+        device.queue.submit([encoder.finish()]);
+    }
+
+    createBindGroup(scriptId, pipeline) {
+        const device = this.webgpuCore.getDevice();
+        const bufferInfo = this.bufferManager.getBufferReference(scriptId);
+        
+        // For simple shaders with no inputs, create a minimal bind group
+        try {
+            const bindGroupLayout = pipeline.getBindGroupLayout(0);
+            
+            // Create a simple bind group - many shaders don't need any bindings
+            const entries = [];
+            
+            // Only add entries if the layout expects them
+            // For basic fragment shaders, we might not need any bindings
+            const bindGroup = device.createBindGroup({
+                layout: bindGroupLayout,
+                entries: entries
+            });
+
+            return bindGroup;
+        } catch (error) {
+            console.warn('Failed to create bind group, trying without entries:', error);
+            // Fallback: create bind group with no entries
+            try {
+                return device.createBindGroup({
+                    layout: pipeline.getBindGroupLayout(0),
+                    entries: []
+                });
+            } catch (fallbackError) {
+                console.error('Failed to create any bind group:', fallbackError);
+                throw fallbackError;
+            }
+        }
+    }
+
+    getAvailableBuffers(excludeScriptId) {
+        const available = new Map();
+        for (const [scriptId, script] of this.scripts) {
+            if (scriptId !== excludeScriptId) {
+                available.set(scriptId, script.bufferSpec);
+            }
+        }
+        return available;
+    }
+
+    getFullscreenVertexShader() {
+        const device = this.webgpuCore.getDevice();
+        
+        // Cache the fullscreen vertex shader
+        if (!this.fullscreenVertexShader) {
+            this.fullscreenVertexShader = device.createShaderModule({
+                code: `
+                    @vertex
+                    fn main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
+                        let x = f32((vertexIndex << 1u) & 2u) - 1.0;
+                        let y = f32(vertexIndex & 2u) - 1.0;
+                        return vec4<f32>(x, y, 0.0, 1.0);
+                    }
+                `
+            });
+        }
+        
+        return this.fullscreenVertexShader;
+    }
+
+    realTimeLoop() {
+        if (!this.isRealTimeRunning) return;
+
+        const frameTime = 1000 / this.frameRate;
+        const startTime = performance.now();
+        
+        // Use requestAnimationFrame instead of setTimeout for better performance
+        this.animationFrame = requestAnimationFrame(async () => {
+            try {
+                // Check if we should skip this frame to maintain target framerate
+                const elapsed = performance.now() - startTime;
+                if (elapsed < frameTime) {
+                    this.realTimeLoop();
+                    return;
+                }
+
+                await this.executeAllScripts();
+                
+                // Yield to main thread before next iteration
+                setTimeout(() => {
+                    this.realTimeLoop();
+                }, 0);
+                
+            } catch (error) {
+                console.error('Real-time execution error:', error);
+                this.stopRealTimeExecution();
+            }
+        });
+    }
+
+    dispatchEvent(type, detail) {
+        this.eventTarget.dispatchEvent(new CustomEvent(type, { detail }));
+    }
+
+    addEventListener(type, listener) {
+        this.eventTarget.addEventListener(type, listener);
+    }
+
+    removeEventListener(type, listener) {
+        this.eventTarget.removeEventListener(type, listener);
+    }
+
+    destroy() {
+        this.stopRealTimeExecution();
+        this.scripts.clear();
+        this.pipelines.clear();
+    }
+}
+
+// Export for module usage
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ScriptEngine;
+} else {
+    window.ScriptEngine = ScriptEngine;
+}

@@ -1,5 +1,4 @@
-
-    {{ define "Title" }}
+{{ define "Title" }}
         Shader Editor
     {{ end }}
 
@@ -122,25 +121,333 @@
     window.shaderData = {
         id: {{if .Shader.ID}}{{.Shader.ID}}{{else}}null{{end}},
         name: "{{if .Shader.Name}}{{.Shader.Name}}{{else}}New Shader{{end}}",
-        scripts: [
+        shader_scripts: [
             {{range .Shader.ShaderScripts}}
             {
                 id: {{.ID}},
-                code: {{.Code | printf "%q"}}
+                code: {{.Code | printf "%q"}},
+                buffer: {
+                    format: "{{if .Buffer.Format}}{{.Buffer.Format}}{{else}}rgba8unorm{{end}}",
+                    width: {{if .Buffer.Width}}{{.Buffer.Width}}{{else}}512{{end}},
+                    height: {{if .Buffer.Height}}{{.Buffer.Height}}{{else}}512{{end}}
+                }
             },
             {{else}}
             {
-                id: null,
-                code: "@fragment\nfn main() -> @location(0) vec4<f32> {\n    return vec4<f32>(1.0, 0.0, 0.0, 1.0);\n}"
-            },
+                id: 0,
+                code: "@fragment\nfn main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {\n    let uv = fragCoord.xy / vec2<f32>(512.0, 512.0);\n    return vec4<f32>(uv, 0.5, 1.0);\n}",
+                buffer: {
+                    format: "rgba8unorm",
+                    width: 512,
+                    height: 512
+                }
+            }
             {{end}}
         ],
         tags: [
             {{range .Shader.Tags}}
-            "{{.Name}}",
+            {
+                id: {{.ID}},
+                name: "{{.Name}}"
+            },
             {{end}}
         ]
     };
     </script>
+
+    <!-- WebGPU Shader System Scripts -->
+    <script src="/static/js/webgpu-core.js"></script>
+    <script src="/static/js/shader-compiler.js"></script>
+    <script src="/static/js/buffer-manager.js"></script>
+    <script src="/static/js/script-engine.js"></script>
+    <script src="/static/js/visualization-engine.js"></script>
+    <script src="/static/js/shader-workspace.js"></script>
     <script src="/static/js/split_window.js"></script>
+    
+    <!-- Editor Integration Script -->
+    <script>
+    document.addEventListener('DOMContentLoaded', async function() {
+        const editorContainer = document.querySelector('.editor-page');
+        let workspace = null;
+        let activeScriptId = 0;
+        let initializationInProgress = false;
+
+        // Console helper
+        function showConsoleMessage(message, type = 'info') {
+            const console = document.querySelector('#shader-errors');
+            if (console) {
+                const messageElement = document.createElement('div');
+                messageElement.className = `console-message ${type}`;
+                messageElement.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                console.appendChild(messageElement);
+                console.scrollTop = console.scrollHeight;
+                
+                // Limit console messages to prevent memory issues
+                while (console.children.length > 100) {
+                    console.removeChild(console.firstChild);
+                }
+            }
+        }
+
+        // Initialize workspace with timeout protection
+        async function initializeWorkspace() {
+            if (initializationInProgress) return;
+            initializationInProgress = true;
+            
+            try {
+                showConsoleMessage('Initializing WebGPU workspace...', 'info');
+                
+                workspace = new ShaderWorkspace(editorContainer, {
+                    autoSave: false,
+                    realTimeExecution: false
+                });
+
+                console.log('Created workspace, starting initialization...');
+                await workspace.initialize();
+                console.log('Workspace initialization complete');
+                
+                // Simple shader creation without complex loading logic
+                console.log('Creating default shader...');
+                await workspace.createNewShader(window.shaderData?.name || 'New Shader');
+                activeScriptId = 0;
+                
+                showConsoleMessage('Workspace ready', 'success');
+                console.log('Shader workspace ready');
+
+            } catch (error) {
+                console.error('Failed to initialize workspace:', error);
+                showConsoleMessage('WebGPU initialization failed: ' + error.message, 'error');
+                
+                // Fallback: disable WebGPU features
+                const canvas = document.querySelector('#webgpu-canvas');
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.fillStyle = '#333';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.fillStyle = '#fff';
+                        ctx.font = '16px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('WebGPU not available', canvas.width/2, canvas.height/2);
+                    }
+                }
+            } finally {
+                initializationInProgress = false;
+            }
+        }
+
+        // Editor event handlers with debouncing
+        function setupEditorEventHandlers() {
+            // Save button
+            const saveBtn = document.querySelector('#save-shader');
+            const createBtn = document.querySelector('#create-shader');
+            
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async () => {
+                    if (!workspace) return;
+                    
+                    try {
+                        saveBtn.disabled = true;
+                        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                        
+                        await workspace.saveShader();
+                        showConsoleMessage('Shader saved successfully', 'success');
+                        
+                    } catch (error) {
+                        showConsoleMessage('Save failed: ' + error.message, 'error');
+                    } finally {
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+                    }
+                });
+            }
+
+            if (createBtn) {
+                createBtn.addEventListener('click', async () => {
+                    if (!workspace) return;
+                    
+                    try {
+                        createBtn.disabled = true;
+                        createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+                        
+                        await workspace.saveShader();
+                        showConsoleMessage('Shader created successfully', 'success');
+                        
+                        // Redirect to edit page with new ID
+                        if (workspace.currentShader?.id) {
+                            window.location.href = `/editor/${workspace.currentShader.id}`;
+                        }
+                        
+                    } catch (error) {
+                        showConsoleMessage('Create failed: ' + error.message, 'error');
+                    } finally {
+                        createBtn.disabled = false;
+                        createBtn.innerHTML = '<i class="fas fa-plus"></i> Create Shader';
+                    }
+                });
+            }
+
+            // Run button
+            const runBtn = document.querySelector('#run-shader');
+            if (runBtn) {
+                runBtn.addEventListener('click', async () => {
+                    if (!workspace) return;
+                    
+                    try {
+                        runBtn.disabled = true;
+                        runBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
+                        
+                        await workspace.runAllScripts();
+                        showConsoleMessage('Shader executed successfully', 'success');
+                        
+                    } catch (error) {
+                        showConsoleMessage('Execution failed: ' + error.message, 'error');
+                    } finally {
+                        runBtn.disabled = false;
+                        runBtn.innerHTML = '<i class="fas fa-play"></i> Run';
+                    }
+                });
+            }
+
+            // Compile button
+            const compileBtn = document.querySelector('#compile-shader');
+            if (compileBtn) {
+                compileBtn.addEventListener('click', async () => {
+                    if (!workspace) return;
+                    
+                    try {
+                        const activeTextarea = document.querySelector('.code-editor-wrapper.active textarea');
+                        if (activeTextarea) {
+                            const code = activeTextarea.value;
+                            await workspace.shaderCompiler.compileShader(code);
+                            showConsoleMessage('Shader compiled successfully', 'success');
+                        }
+                    } catch (error) {
+                        showConsoleMessage('Compilation failed: ' + error.message, 'error');
+                        if (error.details) {
+                            error.details.forEach(detail => {
+                                showConsoleMessage(`Line ${detail.line}: ${detail.message}`, 'error');
+                            });
+                        }
+                    }
+                });
+            }
+
+            // Clear console button
+            const clearConsoleBtn = document.querySelector('#clear-console');
+            if (clearConsoleBtn) {
+                clearConsoleBtn.addEventListener('click', () => {
+                    const console = document.querySelector('#shader-errors');
+                    if (console) {
+                        console.innerHTML = '';
+                    }
+                });
+            }
+
+            // Code editor changes
+            const codeEditors = document.querySelectorAll('.shader-code');
+            codeEditors.forEach((editor, index) => {
+                let debounceTimer;
+                
+                editor.addEventListener('input', () => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        if (workspace && editor.dataset.scriptId) {
+                            const scriptId = parseInt(editor.dataset.scriptId) || index;
+                            workspace.updateScriptCode(scriptId, editor.value);
+                        }
+                    }, 500); // Debounce for 500ms
+                });
+            });
+
+            // Tab switching
+            const tabButtons = document.querySelectorAll('.tab-btn:not(.add-tab)');
+            tabButtons.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const targetId = tab.dataset.target;
+                    
+                    // Update active tab
+                    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    
+                    // Update active editor
+                    document.querySelectorAll('.code-editor-wrapper').forEach(w => w.classList.remove('active'));
+                    const targetWrapper = document.querySelector(`#wrapper-${targetId.split('-')[1]}`);
+                    if (targetWrapper) {
+                        targetWrapper.classList.add('active');
+                        activeScriptId = parseInt(targetId.split('-')[1]) || 0;
+                    }
+                });
+            });
+
+            // Add script button
+            const addScriptBtn = document.querySelector('#add-script');
+            if (addScriptBtn) {
+                addScriptBtn.addEventListener('click', async () => {
+                    if (!workspace) return;
+                    
+                    try {
+                        const newScriptId = await workspace.addScript();
+                        
+                        // Add new tab and editor
+                        const tabContainer = document.querySelector('.code-tabs');
+                        const editorContainer = document.querySelector('.code-editor-container');
+                        
+                        if (tabContainer && editorContainer) {
+                            // Create new tab
+                            const newTab = document.createElement('button');
+                            newTab.className = 'tab-btn';
+                            newTab.dataset.target = `editor-${newScriptId}`;
+                            newTab.innerHTML = `Script ${newScriptId} <span class="tab-close" data-tab="${newScriptId}">×</span>`;
+                            
+                            // Insert before add button
+                            tabContainer.insertBefore(newTab, addScriptBtn);
+                            
+                            // Create new editor
+                            const newEditor = document.createElement('div');
+                            newEditor.className = 'code-editor-wrapper';
+                            newEditor.id = `wrapper-${newScriptId}`;
+                            newEditor.innerHTML = `
+                                <textarea id="editor-${newScriptId}" 
+                                        class="shader-code" 
+                                        data-script-id="${newScriptId}"
+                                        placeholder="Enter your WGSL shader code here...">${workspace.getDefaultShaderCode('fragment')}</textarea>
+                            `;
+                            
+                            editorContainer.appendChild(newEditor);
+                            
+                            // Switch to new tab
+                            newTab.click();
+                        }
+                        
+                        showConsoleMessage(`Added new script ${newScriptId}`, 'info');
+                        
+                    } catch (error) {
+                        showConsoleMessage('Failed to add script: ' + error.message, 'error');
+                    }
+                });
+            }
+        }
+
+        // Initialize event handlers
+        setupEditorEventHandlers();
+
+        // Initialize workspace
+        console.log('Starting workspace initialization...');
+        
+        // Test basic functionality first
+        setTimeout(() => {
+            console.log('Basic setTimeout working');
+            showConsoleMessage('JavaScript execution test passed', 'info');
+        }, 100);
+        
+        // Initialize workspace with delay to ensure DOM is ready
+        setTimeout(() => {
+            initializeWorkspace();
+        }, 500);
+
+        // Make workspace globally available for debugging
+        window.shaderWorkspace = workspace;
+    });
+    </script>
 {{ end }}
