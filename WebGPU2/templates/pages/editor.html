@@ -68,10 +68,11 @@
                             <div class="code-editor-wrapper active" id="wrapper-0">
                                 <textarea id="editor-0" 
                                         class="shader-code" 
-                                        placeholder="@fragment
-    fn main() -> @location(0) vec4<f32> {
-        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
-    }"></textarea>
+                                        data-script-id="0"
+                                        placeholder="Enter your WGSL shader code here...">@fragment
+fn main() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+}</textarea>
                             </div>
                             {{end}}
                         </div>
@@ -211,6 +212,13 @@
                 await workspace.createNewShader(window.shaderData?.name || 'New Shader');
                 activeScriptId = 0;
                 
+                // Update the textarea data-script-id to match the actual script ID
+                const defaultTextarea = document.querySelector('#editor-0');
+                if (defaultTextarea) {
+                    defaultTextarea.dataset.scriptId = '0';
+                    console.log('Updated textarea script ID to 0');
+                }
+                
                 showConsoleMessage('Workspace ready', 'success');
                 console.log('Shader workspace ready');
 
@@ -296,6 +304,15 @@
                     try {
                         runBtn.disabled = true;
                         runBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
+                        
+                        // Update script code from active editor before running
+                        const activeEditor = document.querySelector('.code-editor-wrapper.active textarea');
+                        if (activeEditor) {
+                            const scriptId = parseInt(activeEditor.dataset.scriptId) || 0;
+                            const currentCode = activeEditor.value;
+                            console.log('Updating script', scriptId, 'with code from editor:', currentCode);
+                            workspace.updateScriptCode(scriptId, currentCode);
+                        }
                         
                         await workspace.runAllScripts();
                         showConsoleMessage('Shader executed successfully', 'success');

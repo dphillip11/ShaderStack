@@ -333,12 +333,19 @@ class ShaderWorkspace {
         if (!this.isInitialized) return;
 
         try {
+            console.log('runAllScripts called');
+            console.log('Current shader scripts:', this.currentShader?.shader_scripts);
+            
             await this.scriptEngine.executeAllScripts();
 
             // Update main visualization with the last script
             const scripts = this.currentShader?.shader_scripts || [];
+            console.log('Scripts for visualization:', scripts);
+            
             if (scripts.length > 0) {
                 const lastScriptId = scripts[scripts.length - 1].id;
+                console.log('Rendering script ID:', lastScriptId);
+                
                 const canvas = this.container.querySelector('#webgpu-canvas');
                 if (canvas) {
                     this.visualizationEngine.renderBufferAsTexture(lastScriptId, canvas);

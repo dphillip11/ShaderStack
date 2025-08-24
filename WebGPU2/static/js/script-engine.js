@@ -154,6 +154,9 @@ class ScriptEngine {
         if (!script) return null;
 
         try {
+            console.log(`Creating pipeline for script ${scriptId}`);
+            console.log('Script code being compiled:', script.code);
+            
             // Get available buffer bindings from other scripts
             const availableBuffers = this.getAvailableBuffers(scriptId);
             
@@ -162,12 +165,16 @@ class ScriptEngine {
                 script.code, 
                 availableBuffers
             );
+            
+            console.log('Enhanced code for compilation:', enhancedCode);
 
             // Compile shader
             const compilation = await this.shaderCompiler.compileShader(enhancedCode, script.type);
+            console.log('Shader compiled successfully');
             
             // Create pipeline based on shader type
             const pipeline = await this.createPipelineForType(scriptId, compilation, script.type);
+            console.log('Pipeline created successfully');
             
             this.pipelines.set(scriptId, pipeline);
             return pipeline;
@@ -208,6 +215,10 @@ class ScriptEngine {
                     targets: [{
                         format: bufferFormat
                     }]
+                },
+                primitive: {
+                    topology: 'triangle-list',
+                    cullMode: 'none'  // Disable face culling
                 }
             });
         }
@@ -237,6 +248,9 @@ class ScriptEngine {
             computePass.end();
         } else {
             // Render shader execution - render to buffer texture with matching format
+            console.log(`Rendering ${script.type} shader for script ${scriptId}`);
+            console.log('Drawing 6 vertices for fullscreen quad');
+            
             const renderPass = encoder.beginRenderPass({
                 colorAttachments: [{
                     view: bufferInfo.textureView,
@@ -248,7 +262,7 @@ class ScriptEngine {
             
             renderPass.setPipeline(pipeline);
             renderPass.setBindGroup(0, bindGroup);
-            renderPass.draw(3); // Fullscreen triangle
+            renderPass.draw(6); // Two triangles (6 vertices)
             renderPass.end();
         }
 
@@ -308,9 +322,21 @@ class ScriptEngine {
                 code: `
                     @vertex
                     fn main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
-                        let x = f32((vertexIndex << 1u) & 2u) - 1.0;
-                        let y = f32(vertexIndex & 2u) - 1.0;
-                        return vec4<f32>(x, y, 0.0, 1.0);
+                        // Two triangles forming a quad covering the entire screen
+                        // Triangle 1: bottom-left triangle (0,1,2)
+                        // Triangle 2: top-right triangle (3,4,5)
+                        
+                        let positions = array<vec2<f32>, 6>(
+                            vec2<f32>(-1.0, -1.0),  // 0: bottom-left
+                            vec2<f32>( 1.0, -1.0),  // 1: bottom-right
+                            vec2<f32>( 1.0,  1.0),  // 2: top-right
+                            vec2<f32>(-1.0, -1.0),  // 3: bottom-left  
+                            vec2<f32>( 1.0,  1.0),  // 4: top-right
+                            vec2<f32>(-1.0,  1.0)   // 5: top-left
+                        );
+                        
+                        let pos = positions[vertexIndex];
+                        return vec4<f32>(pos.x, pos.y, 0.0, 1.0);
                     }
                 `
             });
