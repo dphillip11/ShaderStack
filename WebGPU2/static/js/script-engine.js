@@ -34,7 +34,6 @@ class ScriptEngine {
         const device = this.webgpuCore.getDevice();
         
         // Create separate uniform buffers for time and mouse
-        // This avoids WebGPU's complex struct padding requirements
         this.timeBuffer = device.createBuffer({
             label: 'Time Uniform',
             size: 16, // f32 with 16-byte alignment
@@ -46,39 +45,6 @@ class ScriptEngine {
             size: 16, // vec2<f32> with 16-byte alignment
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-        
-        // Create bind group layout for individual uniform bindings
-        this.uniformBindGroupLayout = device.createBindGroupLayout({
-            label: 'Uniform Bind Group Layout',
-            entries: [
-                {
-                    binding: 0,
-                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
-                    buffer: { type: 'uniform' },
-                },
-                {
-                    binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
-                    buffer: { type: 'uniform' },
-                }
-            ],
-        });
-        
-        // Create bind group with separate buffers
-        this.uniformBindGroup = device.createBindGroup({
-            label: 'Uniform Bind Group',
-            layout: this.uniformBindGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: { buffer: this.timeBuffer },
-                },
-                {
-                    binding: 1,
-                    resource: { buffer: this.mouseBuffer },
-                }
-            ],
-        });
     }
 
     updateUniforms() {
@@ -88,11 +54,6 @@ class ScriptEngine {
         const currentTime = Date.now() / 1000.0;
         const timeData = new Float32Array([currentTime]);
         device.queue.writeBuffer(this.timeBuffer, 0, timeData);
-        
-        // Debug: Log time updates during real-time execution
-        if (this.isRealTimeRunning) {
-            console.log('Time uniform updated:', currentTime.toFixed(3));
-        }
         
         // Update mouse buffer (vec2<f32>)
         const mouseData = new Float32Array([this.mousePosition.x, this.mousePosition.y]);
@@ -237,6 +198,7 @@ class ScriptEngine {
     }
 
     async executeAllScripts() {
+        console.log('ScriptEngine: executeAllScripts called, execution order:', this.executionOrder);
         const results = [];
         
         for (const scriptId of this.executionOrder) {
@@ -245,10 +207,13 @@ class ScriptEngine {
                 results.push({ scriptId, success: true });
             } catch (error) {
                 results.push({ scriptId, success: false, error });
+                console.error(`Script ${scriptId} execution failed:`, error);
             }
         }
         
+        console.log('ScriptEngine: All scripts executed, dispatching allScriptsExecuted event');
         this.dispatchEvent('allScriptsExecuted', { results });
+        console.log('ScriptEngine: allScriptsExecuted event dispatched');
         return results;
     }
 
@@ -322,14 +287,10 @@ class ScriptEngine {
         const device = this.webgpuCore.getDevice();
         const bufferInfo = this.bufferManager.getBufferReference(scriptId);
 
-        // Create explicit pipeline layout that includes our uniform buffer
-        const availableBuffers = this.getAvailableBuffers(scriptId);
-        const pipelineLayout = this.createPipelineLayout(availableBuffers);
-
         if (type === 'compute') {
             return device.createComputePipeline({
                 label: `Compute pipeline ${scriptId}`,
-                layout: pipelineLayout,
+                layout: 'auto',
                 compute: {
                     module: compilation.shaderModule,
                     entryPoint: 'main'
@@ -341,7 +302,7 @@ class ScriptEngine {
             
             return device.createRenderPipeline({
                 label: `Render pipeline ${scriptId}`,
-                layout: pipelineLayout,
+                layout: 'auto',
                 vertex: {
                     module: this.getFullscreenVertexShader(),
                     entryPoint: 'main'
@@ -359,66 +320,6 @@ class ScriptEngine {
                 }
             });
         }
-    }
-
-    createPipelineLayout(availableBuffers) {
-        const device = this.webgpuCore.getDevice();
-        
-        // Create bind group layout entries
-        const entries = [];
-        
-        // Add time uniform at binding 0
-        entries.push({
-            binding: 0,
-            visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
-            buffer: { type: 'uniform' },
-        });
-        
-        // Add mouse uniform at binding 1
-        entries.push({
-            binding: 1,
-            visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX,
-            buffer: { type: 'uniform' },
-        });
-        
-        // Add texture bindings for other scripts (starting at binding 2)
-        let bindingIndex = 2;
-        for (const [scriptId, bufferSpec] of availableBuffers) {
-            const sampleType = this.getTextureSampleType(bufferSpec.format);
-            
-            entries.push({
-                binding: bindingIndex,
-                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-                texture: {
-                    sampleType: sampleType,
-                    viewDimension: '2d',
-                    multisampled: false,
-                },
-            });
-            bindingIndex++;
-        }
-        
-        const bindGroupLayout = device.createBindGroupLayout({
-            label: 'Pipeline Bind Group Layout',
-            entries: entries
-        });
-        
-        return device.createPipelineLayout({
-            label: 'Pipeline Layout',
-            bindGroupLayouts: [bindGroupLayout]
-        });
-    }
-
-    getTextureSampleType(format) {
-        // Map texture formats to their correct sample types
-        const sampleTypeMap = {
-            'rgba8unorm': 'float',
-            'rgba16float': 'unfilterable-float',
-            'rgba32float': 'unfilterable-float',
-            'r32float': 'unfilterable-float',
-            'rg32float': 'unfilterable-float'
-        };
-        return sampleTypeMap[format] || 'float';
     }
 
     async runPipeline(scriptId, pipeline, inputs) {
@@ -461,9 +362,6 @@ class ScriptEngine {
             computePass.end();
         } else {
             // Render shader execution - render to buffer texture with matching format
-            console.log(`Rendering ${script.type} shader for script ${scriptId}`);
-            console.log('Drawing 6 vertices for fullscreen quad');
-            
             const renderPass = encoder.beginRenderPass({
                 colorAttachments: [{
                     view: bufferInfo.textureView,
@@ -507,7 +405,7 @@ class ScriptEngine {
             
             // Add texture bindings for other scripts (starting at binding 2)
             let bindingIndex = 2;
-            for (const [scriptId, bufferSpec] of availableBuffers) {
+            for (const [otherScriptId, bufferSpec] of availableBuffers) {
                 const sampleType = this.getTextureSampleType(bufferSpec.format);
                 
                 entries.push({
@@ -564,6 +462,19 @@ class ScriptEngine {
         } catch (error) {
             console.error('Failed to create bind group:', error);
             throw error;
+        }
+    }
+
+    getTextureSampleType(format) {
+        // Map buffer formats to WebGPU texture sample types
+        if (format.includes('float') || format === 'rgba8unorm' || format === 'bgra8unorm') {
+            return 'float';
+        } else if (format.includes('uint')) {
+            return 'uint';
+        } else if (format.includes('sint')) {
+            return 'sint';
+        } else {
+            return 'float'; // Default fallback
         }
     }
 
