@@ -128,3 +128,17 @@ export function toggleTag(tag) {
 
 export function clearSearch() { applyFilters({ name: '' }); }
 export function clearAllFilters() { applyFilters({ name: '', tags: [] }); }
+
+// Function to refresh shaders data from the server
+export async function refreshShaders() {
+  try {
+    const [shaderData, tagData] = await Promise.all([
+      apiGet('/api/shaders'),
+      apiGet('/api/tags').catch(() => [])
+    ]);
+    shaders.set(shaderData || []);
+    tags.set(tagData || []);
+  } catch (e) {
+    console.error('Failed refreshing shaders:', e);
+  }
+}

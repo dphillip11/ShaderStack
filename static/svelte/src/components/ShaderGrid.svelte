@@ -1,6 +1,13 @@
 <script>
   import ShaderCard from './ShaderCard.svelte';
+  import { createEventDispatcher } from 'svelte';
+  
   export let list = [];
+  const dispatch = createEventDispatcher();
+
+  function handleDelete(event) {
+    dispatch('delete', event.detail);
+  }
 </script>
 
 <div class="shader-grid">
@@ -8,7 +15,7 @@
     <div class="no-shaders">No shaders found</div>
   {:else}
     {#each list as shader (shader.id || shader.ID)}
-      <ShaderCard {shader} />
+      <ShaderCard {shader} on:delete={handleDelete} />
     {/each}
   {/if}
 </div>

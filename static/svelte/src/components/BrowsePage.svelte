@@ -2,13 +2,18 @@
   import SearchBar from './SearchBar.svelte';
   import TagFilters from './TagFilters.svelte';
   import ShaderGrid from './ShaderGrid.svelte';
-  import { filteredShaders, availableTags, shaderFilters } from '../stores/shaders.js';
+  import DeleteConfirmDialog from './DeleteConfirmDialog.svelte';
+  import { filteredShaders, availableTags, shaderFilters, refreshShaders } from '../stores/shaders.js';
+  import { deleteShaderProject } from '../stores/api.js';
   import { onMount } from 'svelte';
 
   let list = [];
   let tags = [];
   let filters;
   let pageTitle = 'Browse Shaders';
+  let showDeleteDialog = false;
+  let shaderToDelete = null;
+  let isDeleting = false;
 
   // Check if we're on the "My Shaders" page
   if (typeof window !== 'undefined' && window.myShaders) {
@@ -20,6 +25,38 @@
     availableTags.subscribe(v => tags = v),
     shaderFilters.subscribe(v => filters = v)
   ];
+
+  function handleShaderDelete(event) {
+    const { shader, id, name } = event.detail;
+    shaderToDelete = { shader, id, name };
+    showDeleteDialog = true;
+  }
+
+  function hideDeleteDialog() {
+    if (isDeleting) return;
+    showDeleteDialog = false;
+    shaderToDelete = null;
+  }
+
+  async function confirmDelete() {
+    if (!shaderToDelete || isDeleting) return;
+    
+    try {
+      isDeleting = true;
+      await deleteShaderProject(shaderToDelete.id);
+      
+      // Refresh the shader list to remove the deleted shader
+      await refreshShaders();
+      
+      // Hide dialog and reset state
+      hideDeleteDialog();
+      
+      console.log(`Shader "${shaderToDelete.name}" deleted successfully`);
+    } catch (error) {
+      console.error('Delete failed:', error);
+      isDeleting = false; // Re-enable UI on error
+    }
+  }
 
   onMount(() => () => unsub.forEach(u => u()));
 </script>
@@ -35,8 +72,17 @@
   </div>
   <SearchBar {filters} />
   <TagFilters {tags} selected={filters.tags} />
-  <ShaderGrid {list} />
+  <ShaderGrid {list} on:delete={handleShaderDelete} />
 </section>
+
+<!-- Delete Confirmation Dialog -->
+<DeleteConfirmDialog 
+  show={showDeleteDialog}
+  shaderName={shaderToDelete?.name || ''}
+  isDeleting={isDeleting}
+  on:confirm={confirmDelete}
+  on:cancel={hideDeleteDialog}
+/>
 
 <style>
   .browse-svelte { display: flex; flex-direction: column; gap: 1rem; }

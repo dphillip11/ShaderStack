@@ -7,6 +7,7 @@
   import CodeEditor from './editor/CodeEditor.svelte';
   import PreviewPanel from './editor/PreviewPanel.svelte';
   import ConsolePanel from './editor/ConsolePanel.svelte';
+  import DeleteConfirmDialog from './DeleteConfirmDialog.svelte';
   import { derived } from 'svelte/store';
 
   const state = editorState;
@@ -302,25 +303,14 @@
   </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-{#if showDeleteConfirm}
-  <div class="modal-overlay" on:click={hideDeleteDialog}>
-    <div class="modal-content" on:click|stopPropagation>
-      <div class="modal-header">
-        <h3>Delete Shader</h3>
-        <button class="modal-close" on:click={hideDeleteDialog}>×</button>
-      </div>
-      <div class="modal-body">
-        <p>Are you sure you want to delete <strong>"{$state.shader?.name}"</strong>?</p>
-        <p class="warning-text">This action cannot be undone.</p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-cancel" on:click={hideDeleteDialog}>Cancel</button>
-        <button class="btn-delete" on:click={confirmDelete}>Delete</button>
-      </div>
-    </div>
-  </div>
-{/if}
+<!-- Delete Confirmation Dialog -->
+<DeleteConfirmDialog 
+  show={showDeleteConfirm}
+  shaderName={$state.shader?.name || ''}
+  isDeleting={$saving}
+  on:confirm={confirmDelete}
+  on:cancel={hideDeleteDialog}
+/>
 
 <style>
   .svelte-editor { 
@@ -568,91 +558,5 @@
       font-size: 0.75rem;
       padding: 0.2rem 0.5rem;
     }
-  }
-
-  /* Modal styles */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .modal-content {
-    background-color: white;
-    border-radius: 0.5rem;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    width: 90%;
-    max-width: 500px;
-    padding: 1rem;
-    position: relative;
-  }
-
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 0.5rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .modal-header h3 {
-    margin: 0;
-    font-size: 1.25rem;
-  }
-
-  .modal-close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: #718096;
-  }
-
-  .modal-body {
-    padding: 0.5rem 0;
-  }
-
-  .modal-body p {
-    margin: 0.5rem 0;
-  }
-
-  .warning-text {
-    color: #e53e3e;
-    font-weight: bold;
-  }
-
-  .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    border-top: 1px solid #e2e8f0;
-    padding-top: 0.5rem;
-    margin-top: 0.5rem;
-  }
-
-  .btn-cancel {
-    background-color: #edf2f7;
-    color: #2d3748;
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 0.25rem;
-    cursor: pointer;
-  }
-
-  .btn-delete {
-    background-color: #e53e3e;
-    color: white;
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 0.25rem;
-    cursor: pointer;
   }
 </style>

@@ -1,12 +1,27 @@
 <script>
+  import { createEventDispatcher } from 'svelte';
+  import { auth } from '../stores/auth.js';
+
   export let shader;
+  const dispatch = createEventDispatcher();
+
   const id = shader.id ?? shader.ID;
   const name = shader.name ?? shader.Name;
   const author = shader.author ?? shader.Author;
+  const userId = shader.user_id ?? shader.UserID;
   const scripts = shader.shader_scripts ?? shader.ShaderScripts ?? [];
   const firstCode = scripts[0]?.code ?? scripts[0]?.Code ?? '';
   const tagObjs = shader.tags ?? shader.Tags ?? [];
   const tagNames = tagObjs.map(t => t.name || t.Name);
+
+  // Check if current user owns this shader
+  $: isOwner = $auth.isAuthenticated && $auth.user_id === userId;
+
+  function handleDelete(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    dispatch('delete', { shader, id, name });
+  }
 </script>
 
 <div class="shader-card" data-shader-id={id}>
@@ -25,6 +40,11 @@
   {/if}
   <div class="shader-actions">
     <a href="/{id}" class="btn-secondary"><i class="fas fa-eye"></i> View</a>
+    {#if isOwner}
+      <button class="btn-delete" on:click={handleDelete} title="Delete shader">
+        <i class="fas fa-trash"></i> Delete
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -105,5 +125,28 @@
     display: flex;
     gap: 0.5rem;
     background-color: #f8fafc;
+  }
+
+  .btn-delete {
+    background-color: #e53e3e;
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+  }
+
+  .btn-delete:hover {
+    background-color: #c53030;
+  }
+
+  .btn-delete i {
+    font-size: 0.75rem;
   }
 </style>
