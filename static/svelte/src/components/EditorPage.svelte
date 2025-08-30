@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { editorState, activeScript, addConsoleMessage, setActiveScript, updateScriptCode, updateShaderName } from '../stores/editor.js';
+  import { editorState, activeScript, addConsoleMessage, setActiveScript, updateScriptCode, updateShaderName, setShaderTags } from '../stores/editor.js';
   import { auth } from '../stores/auth.js';
   import { initWorkspace, runAll, saveShader, compileActive, startRealTime, stopRealTime, isRealTimeRunning, startAutoSave, stopAutoSave } from '../adapters/workspaceAdapter.js';
   import ScriptTabs from './editor/ScriptTabs.svelte';
@@ -24,6 +24,8 @@
 
   let isEditingName = false;
   let editingName = '';
+  let isEditingTags = false;
+  let newTagInput = '';
 
   function startEditingName() {
     isEditingName = true;
@@ -49,6 +51,60 @@
       saveShaderName();
     } else if (e.key === 'Escape') {
       cancelEditingName();
+    }
+  }
+
+  // Tag editing functions
+  function startEditingTags() {
+    if (!canEdit) return;
+    isEditingTags = true;
+    newTagInput = '';
+  }
+
+  function stopEditingTags() {
+    isEditingTags = false;
+    newTagInput = '';
+  }
+
+  function addTag() {
+    const tagName = newTagInput.trim().toLowerCase();
+    if (!tagName) return;
+
+    const currentTags = $state.shader?.tags || [];
+    const tagExists = currentTags.some(tag => (tag.name || tag.Name || '').toLowerCase() === tagName);
+    
+    if (!tagExists) {
+      const newTag = { name: tagName };
+      const updatedTags = [...currentTags, newTag];
+      setShaderTags(updatedTags);
+      addConsoleMessage(`Added tag "${tagName}"`, 'info');
+    }
+    
+    newTagInput = '';
+  }
+
+  function removeTag(tagToRemove) {
+    if (!canEdit) return;
+    
+    const currentTags = $state.shader?.tags || [];
+    const tagName = tagToRemove.name || tagToRemove.Name || '';
+    const updatedTags = currentTags.filter(tag => 
+      (tag.name || tag.Name || '').toLowerCase() !== tagName.toLowerCase()
+    );
+    
+    setShaderTags(updatedTags);
+    addConsoleMessage(`Removed tag "${tagName}"`, 'info');
+  }
+
+  function handleTagInputKeydown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addTag();
+    } else if (e.key === 'Escape') {
+      stopEditingTags();
+    } else if (e.key === ',' || e.key === ' ') {
+      e.preventDefault();
+      addTag();
     }
   }
 
@@ -115,28 +171,76 @@
 
 <div class="svelte-editor" data-initializing={$initializing}>
   <header class="editor-bar">
-    <div class="title-group">
-      {#if isEditingName && canEdit}
-        <input 
-          type="text" 
-          bind:value={editingName}
-          on:blur={saveShaderName}
-          on:keydown={handleNameKeydown}
-          class="name-input"
-          autofocus
-          placeholder="Shader name"
-        />
-      {:else}
-        <h1 on:click={canEdit ? startEditingName : null} 
-            class="editable-title" 
-            class:read-only={!canEdit}
-            title={canEdit ? "Click to edit name" : "Read-only (not your shader)"}>
-          {$state.shader?.name || 'New Shader'}
-          {#if canEdit}<i class="fas fa-edit edit-icon"></i>{/if}
-        </h1>
-      {/if}
-      {#if !canEdit && $state.shader?.id}<span class="read-only-badge">Read Only</span>{/if}
+    <div class="title-and-meta">
+      <div class="title-group">
+        {#if isEditingName && canEdit}
+          <input 
+            type="text" 
+            bind:value={editingName}
+            on:blur={saveShaderName}
+            on:keydown={handleNameKeydown}
+            class="name-input"
+            autofocus
+            placeholder="Shader name"
+          />
+        {:else}
+          <h1 on:click={canEdit ? startEditingName : null} 
+              class="editable-title" 
+              class:read-only={!canEdit}
+              title={canEdit ? "Click to edit name" : "Read-only (not your shader)"}>
+            {$state.shader?.name || 'New Shader'}
+            {#if canEdit}<i class="fas fa-edit edit-icon"></i>{/if}
+          </h1>
+        {/if}
+        {#if !canEdit && $state.shader?.id}<span class="read-only-badge">Read Only</span>{/if}
+      </div>
+
+      <!-- Tags Section -->
+      <div class="tags-section">
+        <div class="tags-container">
+          {#if $state.shader?.tags && $state.shader.tags.length > 0}
+            {#each $state.shader.tags as tag}
+              <span class="tag-pill">
+                {tag.name || tag.Name}
+                {#if canEdit}
+                  <button 
+                    class="tag-remove" 
+                    on:click={() => removeTag(tag)}
+                    title="Remove tag"
+                    aria-label="Remove {tag.name || tag.Name} tag"
+                  >
+                    ×
+                  </button>
+                {/if}
+              </span>
+            {/each}
+          {/if}
+          
+          {#if canEdit}
+            {#if isEditingTags}
+              <input 
+                type="text" 
+                bind:value={newTagInput}
+                on:blur={stopEditingTags}
+                on:keydown={handleTagInputKeydown}
+                class="tag-input"
+                placeholder="Add tag..."
+                autofocus
+              />
+            {:else}
+              <button 
+                class="add-tag-btn" 
+                on:click={startEditingTags}
+                title="Add new tag"
+              >
+                <i class="fas fa-plus"></i> Add tag
+              </button>
+            {/if}
+          {/if}
+        </div>
+      </div>
     </div>
+
     <div class="actions">
       {#if isAuthenticated && canEdit}
         <button on:click={onSave} disabled={$saving || $initializing}>{$saving ? 'Saving…' : 'Save'}</button>
@@ -295,5 +399,186 @@
     border: 1px solid #cbd5e0;
     border-radius: 0.25rem;
     width: 100%;
+  }
+
+  .tags-section {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .tag-pill {
+    background-color: #edf2f7;
+    color: #2d3748;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .tag-remove {
+    background: none;
+    border: none;
+    color: #e53e3e;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .tag-input {
+    font-size: 1rem;
+    padding: 0.25rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 0.25rem;
+  }
+
+  .add-tag-btn {
+    background-color: #3182ce;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .add-tag-btn i {
+    font-size: 0.75rem;
+  }
+
+  .title-and-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+  }
+
+  .title-group {
+    display: flex;
+    align-items: center;
+  }
+
+  .tags-section {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .tag-pill {
+    background-color: #edf2f7;
+    color: #2d3748;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid #e2e8f0;
+  }
+
+  .tag-remove {
+    background: none;
+    border: none;
+    color: #e53e3e;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .tag-remove:hover {
+    background-color: #fed7d7;
+  }
+
+  .tag-input {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 0.25rem;
+    min-width: 100px;
+  }
+
+  .tag-input:focus {
+    outline: none;
+    border-color: #3182ce;
+    box-shadow: 0 0 0 1px #3182ce;
+  }
+
+  .add-tag-btn {
+    background-color: #4299e1;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border: none;
+    border-radius: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    transition: background-color 0.2s;
+  }
+
+  .add-tag-btn:hover {
+    background-color: #3182ce;
+  }
+
+  .add-tag-btn i {
+    font-size: 0.75rem;
+  }
+
+  /* Responsive design for tags */
+  @media (max-width: 768px) {
+    .title-and-meta {
+      gap: 0.75rem;
+    }
+    
+    .editor-bar {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: stretch;
+    }
+    
+    .tags-container {
+      justify-content: flex-start;
+    }
+    
+    .actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .tag-pill {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+    }
+    
+    .add-tag-btn {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+    }
   }
 </style>
