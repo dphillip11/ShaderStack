@@ -10,16 +10,36 @@ export const shaderFilters = writable({ name: '', tags: [] });
 
 // Derived: filtered shaders applying current filters
 export const filteredShaders = derived([shaders, shaderFilters], ([all, f]) => {
-  const nameQ = f.name.trim().toLowerCase();
+  const searchQuery = f.name.trim().toLowerCase();
   return all.filter(s => {
-    if (nameQ) {
-      const codeSample = s.shader_scripts?.[0]?.code || '';
-      if (!s.name.toLowerCase().includes(nameQ) && !codeSample.toLowerCase().includes(nameQ)) return false;
+    // If there's a search query, check across multiple fields
+    if (searchQuery) {
+      const shaderName = (s.name || '').toLowerCase();
+      const authorName = (s.author || s.Author || '').toLowerCase();
+      const codeSample = (s.shader_scripts?.[0]?.code || '').toLowerCase();
+      
+      // Get all tag names for this shader
+      const shaderTagNames = (s.tags || s.Tags || [])
+        .map(t => (t.name || t.Name || '').toLowerCase());
+      
+      // Check if search query matches any of these fields
+      const matchesName = shaderName.includes(searchQuery);
+      const matchesAuthor = authorName.includes(searchQuery);
+      const matchesCode = codeSample.includes(searchQuery);
+      const matchesTags = shaderTagNames.some(tagName => tagName.includes(searchQuery));
+      
+      // Return false if no matches found
+      if (!matchesName && !matchesAuthor && !matchesCode && !matchesTags) {
+        return false;
+      }
     }
+    
+    // Apply tag filters (existing functionality)
     if (f.tags.length) {
       const shaderTagNames = (s.tags || s.Tags || []).map(t => t.name || t.Name);
       if (!f.tags.every(t => shaderTagNames.includes(t))) return false;
     }
+    
     return true;
   });
 });

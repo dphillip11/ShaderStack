@@ -330,9 +330,75 @@ func (r *Repository) GetShaderByID(id int) *models.Shader {
 	return nil
 }
 
+// Helper method to process tags and ensure they have proper IDs (lock-free for internal use)
+func (r *Repository) processTags(tags []models.Tag) ([]models.Tag, error) {
+	var processedTags []models.Tag
+	
+	for _, tag := range tags {
+		tagName := strings.TrimSpace(tag.Name)
+		if tagName == "" {
+			continue // Skip empty tag names
+		}
+		
+		// Check if tag already exists (lock-free version)
+		existingTag := r.getTagByNameLockFree(tagName)
+		if existingTag != nil {
+			// Use existing tag with proper ID
+			processedTags = append(processedTags, *existingTag)
+		} else {
+			// Create new tag (lock-free version)
+			newTag, err := r.createTagLockFree(tagName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create tag '%s': %v", tagName, err)
+			}
+			processedTags = append(processedTags, *newTag)
+		}
+	}
+	
+	return processedTags, nil
+}
+
+// Lock-free version for internal use when mutex is already held
+func (r *Repository) getTagByNameLockFree(name string) *models.Tag {
+	for _, tag := range r.tags {
+		if strings.EqualFold(tag.Name, name) {
+			return &tag
+		}
+	}
+	return nil
+}
+
+// Lock-free version for internal use when mutex is already held
+func (r *Repository) createTagLockFree(name string) (*models.Tag, error) {
+	// Check if tag already exists
+	for _, tag := range r.tags {
+		if strings.EqualFold(tag.Name, name) {
+			return &tag, nil
+		}
+	}
+	
+	tag := models.Tag{
+		ID:   r.nextTagID,
+		Name: name,
+	}
+	r.nextTagID++
+	
+	r.tags[tag.ID] = tag
+	
+	// Note: We don't save tags here as that would be done by the calling method
+	return &tag, nil
+}
+
 func (r *Repository) CreateShader(shader models.Shader) (*models.Shader, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	
+	// Process tags to ensure they have proper IDs
+	processedTags, err := r.processTags(shader.Tags)
+	if err != nil {
+		return nil, err
+	}
+	shader.Tags = processedTags
 	
 	shader.ID = r.nextShaderID
 	r.nextShaderID++
@@ -346,7 +412,11 @@ func (r *Repository) CreateShader(shader models.Shader) (*models.Shader, error) 
 		r.shadersByTag[tagName] = append(r.shadersByTag[tagName], shader.ID)
 	}
 	
+	// Save both shaders and tags since we may have created new tags
 	if err := r.saveShaders(); err != nil {
+		return nil, err
+	}
+	if err := r.saveTags(); err != nil {
 		return nil, err
 	}
 	
@@ -361,13 +431,24 @@ func (r *Repository) UpdateShader(id int, shader models.Shader) (*models.Shader,
 		return nil, fmt.Errorf("shader not found")
 	}
 	
+	// Process tags to ensure they have proper IDs
+	processedTags, err := r.processTags(shader.Tags)
+	if err != nil {
+		return nil, err
+	}
+	shader.Tags = processedTags
+	
 	shader.ID = id
 	r.shaders[id] = shader
 	
 	// Rebuild indexes (could be optimized)
 	r.buildIndexes()
 	
+	// Save both shaders and tags since we may have created new tags
 	if err := r.saveShaders(); err != nil {
+		return nil, err
+	}
+	if err := r.saveTags(); err != nil {
 		return nil, err
 	}
 	

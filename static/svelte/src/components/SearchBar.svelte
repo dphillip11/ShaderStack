@@ -2,13 +2,34 @@
   import { applyFilters, clearSearch } from '../stores/shaders.js';
   export let filters = { name: '' };
   let q = filters.name;
-  $: if (filters.name !== q) q = filters.name;
-  function submit(e){ e.preventDefault(); applyFilters({ name: q }); }
-  function onClear(){ clearSearch(); }
+  
+  // Only update q from filters if it's different and user isn't actively typing
+  $: if (filters.name !== q && document.activeElement?.tagName !== 'INPUT') {
+    q = filters.name;
+  }
+  
+  function submit(e){ 
+    e.preventDefault(); 
+    applyFilters({ name: q }); 
+  }
+  
+  function onClear(){ 
+    q = '';
+    clearSearch(); 
+  }
+  
+  function onInput(e) {
+    q = e.target.value;
+  }
 </script>
 
 <form class="search-bar" on:submit={submit} role="search" aria-label="Shader search">
-  <input placeholder="Search shaders" bind:value={q} aria-label="Search term" />
+  <input 
+    placeholder="Search by name, author, tags, or code..." 
+    value={q}
+    on:input={onInput}
+    aria-label="Search term" 
+  />
   <button type="submit">Search</button>
   {#if q}
     <button type="button" on:click={onClear} aria-label="Clear search">×</button>
