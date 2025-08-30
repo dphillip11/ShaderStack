@@ -1,150 +1,60 @@
-# WebGPU Shader Editor
+# WebGPU Shader Hub
 
-A modern WebGPU-based shader editor similar to Shadertoy, featuring real-time WGSL shader compilation, multipass rendering, and an intuitive code editor interface.
+Modernized Go + Svelte application for browsing and editing WebGPU (WGSL) shaders.
 
-## Features
+## Current Architecture
+- Backend: Go HTTP server (mux) serving API + HTML templates.
+- Frontend: Svelte 5 single-page segments mounted into base layout (#svelte-root).
+  - Browse page: dynamic search/filter (replaces legacy search.js).
+  - Editor page: Svelte editor (replaces legacy editor inline logic / app.js) using legacy WebGPU core modules via an adapter.
+- Legacy engine modules retained: webgpu-core.js, shader-compiler.js, buffer-manager.js, script-engine.js, visualization-engine.js, shader-workspace.js.
+- Adapter layer: static/svelte/src/adapters/workspaceAdapter.js bridges legacy ShaderWorkspace to Svelte stores.
 
-- 🎨 **Real-time Shader Editor** - CodeMirror-based editor with syntax highlighting
-- ⚡ **WebGPU Rendering** - High-performance GPU-accelerated rendering
-- 🔄 **Multipass Support** - Configure multiple render passes with buffers and textures
-- 🛠️ **WGSL Compilation** - Real-time shader compilation with error reporting
-- 📱 **Responsive Design** - Works on desktop and mobile devices
-- 🎮 **Interactive Controls** - Mouse input and animation controls
+## Migration Status
+Removed from layout:
+- static/js/app.js
+- static/js/search.js
+- inline editor initialization logic
 
-## Prerequisites
+Still present (kept for incremental migration, not loaded by pages):
+- shader_properties.js
+- split_window.js
+- state-manager.js
+- ui-manager.js
+- shader-crud*.js
 
-- A WebGPU-compatible browser (Chrome 113+, Edge 113+, Firefox with WebGPU enabled)
-- Modern browser with ES2020+ support
-
-## Getting Started
-
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-2. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-
-3. **Open your browser** to the URL shown in the terminal (typically `http://localhost:5173`)
-
-## Project Structure
-
+## Building Frontend
 ```
-src/
-├── components/
-│   ├── editor/           # Shader code editor components
-│   ├── renderer/         # WebGPU rendering engine
-│   └── ui/              # User interface controls
-├── shaders/             # Default WGSL shader files
-├── types/               # TypeScript type definitions
-├── utils/               # WebGPU utilities and compiler
-└── main.ts              # Main application entry point
+cd static/svelte
+npm install
+npm run build   # outputs to static/svelte/dist
 ```
+The built bundle is referenced at /static/svelte/dist/assets/app.js.
 
-## Usage
-
-### Basic Shader Editing
-
-1. The editor loads with a default animated shader
-2. Modify the WGSL fragment shader code in the left panel
-3. The preview updates in real-time as you type
-4. Compilation errors are shown in the controls panel
-
-### Multipass Rendering
-
-1. Click "Add Pass" to create additional render passes
-2. Configure inputs and outputs for each pass
-3. Toggle passes on/off to see the effect
-4. Use outputs from one pass as inputs to another
-
-### Shader Uniforms
-
-The following uniforms are automatically provided to your shaders:
-
-```wgsl
-struct Uniforms {
-  time: f32,           // Time in seconds since start
-  resolution: vec2<f32>, // Canvas resolution
-  mouse: vec4<f32>,    // Mouse position (xy: current, zw: click)
-  frame: f32,          // Frame counter
-}
+For dev hot-reload (separate port 5173):
 ```
-
-### Example Shader
-
-```wgsl
-@fragment
-fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
-  let fragCoord = uv * uniforms.resolution;
-  
-  // Simple animated gradient
-  let col = 0.5 + 0.5 * cos(uniforms.time + uv.xyx + vec3<f32>(0.0, 2.0, 4.0));
-  
-  return vec4<f32>(col, 1.0);
-}
+npm run dev
 ```
+(Adjust server / template if you want to load from dev origin instead of built assets.)
 
-## WebGPU Support
-
-This project requires WebGPU support. Check browser compatibility:
-
-- **Chrome/Edge 113+**: Enabled by default
-- **Firefox**: Enable `dom.webgpu.enabled` in `about:config`
-- **Safari**: WebGPU support coming soon
-
-## Development
-
-### Building for Production
-
-```bash
-npm run build
+## Running Server
 ```
-
-### Type Checking
-
-```bash
-npm run tsc
+go run cmd/server/main.go
 ```
+Visit:
+- Browse: http://localhost:8080/
+- New Shader: http://localhost:8080/new
+- Existing Shader: http://localhost:8080/{id}
 
-### Preview Production Build
+## Adding Features
+- Add new Svelte stores/components under static/svelte/src.
+- Keep separation: stores = state, adapters = legacy bridge, components = UI.
 
-```bash
-npm run preview
-```
-
-## Technical Details
-
-### WebGPU Pipeline
-
-1. **Initialization**: Set up WebGPU device and canvas context
-2. **Shader Compilation**: Compile WGSL shaders with error handling
-3. **Buffer Management**: Create and manage vertex/uniform buffers
-4. **Render Loop**: Execute render passes and present to canvas
-
-### Architecture
-
-- **Modular Design**: Separate components for editing, rendering, and UI
-- **Type Safety**: Full TypeScript support with comprehensive types
-- **Error Handling**: Robust error reporting for shader compilation
-- **Performance**: Optimized rendering loop with proper resource management
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+## TODO / Cleanup
+- Migrate shader_properties (tags/name editing) into Svelte.
+- Remove unused legacy JS once feature parity complete.
+- Add syntax highlighting (e.g. use Shiki or Prism lazy load).
+- Implement local draft persistence (localStorage) in editor store.
 
 ## License
-
-MIT License - see LICENSE file for details
-
-## Resources
-
-- [WebGPU Specification](https://gpuweb.github.io/gpuweb/)
-- [WGSL Language Specification](https://gpuweb.github.io/gpuweb/wgsl/)
-- [Shadertoy](https://www.shadertoy.com/) - Inspiration for this project
+MIT

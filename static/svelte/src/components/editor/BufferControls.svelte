@@ -1,0 +1,115 @@
+<script>
+  import { createEventDispatcher } from 'svelte';
+  
+  export let buffer = { format: 'rgba8unorm', width: 512, height: 512 };
+  
+  const dispatch = createEventDispatcher();
+  
+  const formats = [
+    'rgba8unorm',
+    'bgra8unorm', 
+    'rgba16float',
+    'rgba32float',
+    'r8unorm',
+    'rg8unorm'
+  ];
+  
+  function updateBuffer() {
+    dispatch('change', buffer);
+  }
+</script>
+
+<div class="buffer-controls">
+  <div class="buffer-field">
+    <label for="format">Format</label>
+    <select id="format" bind:value={buffer.format} on:change={updateBuffer}>
+      {#each formats as fmt}
+        <option value={fmt}>{fmt}</option>
+      {/each}
+    </select>
+  </div>
+  
+  <div class="buffer-field">
+    <label for="width">Width</label>
+    <input id="width" type="number" min="1" max="4096" 
+           bind:value={buffer.width} on:input={updateBuffer} />
+  </div>
+  
+  <div class="buffer-field">
+    <label for="height">Height</label>
+    <input id="height" type="number" min="1" max="4096" 
+           bind:value={buffer.height} on:input={updateBuffer} />
+  </div>
+  
+  <div class="buffer-info">
+    <span class="buffer-size">{buffer.width}×{buffer.height}</span>
+  </div>
+</div>
+
+<style>
+  .buffer-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: end;
+    padding: 0.75rem 1rem;
+    background-color: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.8rem;
+  }
+  
+  .buffer-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .buffer-field label {
+    font-weight: 600;
+    color: #4a5568;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+  }
+  
+  .buffer-field select,
+  .buffer-field input {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: white;
+    color: #374151;
+    font-size: 0.8rem;
+    min-width: 80px;
+  }
+  
+  .buffer-field select:focus,
+  .buffer-field input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  }
+  
+  .buffer-info {
+    display: flex;
+    align-items: center;
+    color: #6b7280;
+  }
+  
+  .buffer-size {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.75rem;
+    background: #e5e7eb;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+  }
+  
+  @media (max-width: 768px) {
+    .buffer-controls {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    
+    .buffer-field {
+      min-width: 70px;
+    }
+  }
+</style>

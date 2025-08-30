@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "password": "password123"
+  },
+  {
+    "id": 2,
+    "username": "user",
+    "password": "userpass"
+  },
+  {
+    "id": 3,
+    "username": "demo",
+    "password": "demo123"
+  },
+  {
+    "id": 4,
+    "username": "shaderdev",
+    "password": "webgpu2024"
+  }
+]
