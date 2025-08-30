@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# WebGPU Shader Editor - Build and Run Script
+# ShaderStack Editor - Build and Run Script
 # This script builds the Svelte frontend and runs the Go backend server
 
 set -e  # Exit on any error
 
-echo "🚀 WebGPU Shader Editor - Build and Run"
+echo "🚀 ShaderStack Editor - Build and Run"
 echo "========================================"
 
 # Colors for output
@@ -170,7 +170,7 @@ export PORT=$PORT
 
 print_success "Build completed successfully!"
 echo ""
-print_status "Starting WebGPU Shader Editor server..."
+print_status "Starting ShaderStack Editor server..."
 print_status "Server will be available at: http://localhost:$PORT"
 print_status "Press Ctrl+C to stop the server"
 echo ""
