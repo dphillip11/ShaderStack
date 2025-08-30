@@ -32,7 +32,13 @@
   async function submit(){
     if(username.length<3||password.length<3) return;
     loading=true; error='';
-    try { await login(username.trim(), password); close(); dispatch('loggedIn'); }
+    try { 
+      await login(username.trim(), password); 
+      close(); 
+      dispatch('loggedIn');
+      // Refresh the page to update authentication state throughout the app
+      window.location.reload();
+    }
     catch(e){ error = e.message || 'Login failed'; }
     loading=false;
   }

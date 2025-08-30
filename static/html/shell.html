@@ -14,15 +14,33 @@
       <div class="nav-brand"><a href="/" class="brand-link"><i class="fas fa-cube"></i> ShaderStack</a></div>
       <nav class="nav-menu">
         <a href="/" class="nav-link"><i class="fas fa-search"></i> Browse</a>
-        <a href="/my" class="nav-link" data-auth="required"><i class="fas fa-user"></i> My Shaders</a>
-        <a href="/new" class="nav-link" data-auth="required"><i class="fas fa-plus"></i> New Shader</a>
+        <a href="/my" class="nav-link auth-required"><i class="fas fa-user"></i> My Shaders</a>
+        <a href="/new" class="nav-link auth-required"><i class="fas fa-plus"></i> New Shader</a>
       </nav>
       <div class="nav-auth"><div id="auth-root"></div></div>
     </div>
   </header>
   <main class="main-content"><div id="svelte-root"></div></main>
   <footer class="footer"><div class="footer-content"><p>&copy; 2025 ShaderStack.</p></div></footer>
-  <script>window.__AUTH__=__AUTH__;window.__PAGE__=__PAGE__;__INLINE__</script>
+  <script>
+    window.__AUTH__=__AUTH__;
+    window.__PAGE__=__PAGE__;
+    __INLINE__
+    
+    // Hide auth-required elements if not logged in
+    document.addEventListener('DOMContentLoaded', function() {
+      const isLoggedIn = window.__AUTH__ && window.__AUTH__.isAuthenticated;
+      const authRequiredElements = document.querySelectorAll('.auth-required');
+      
+      authRequiredElements.forEach(element => {
+        if (!isLoggedIn) {
+          element.style.display = 'none';
+        } else {
+          element.style.display = '';
+        }
+      });
+    });
+  </script>
   <script type="module" src="/static/svelte/dist/assets/app.js"></script>
 </body>
 </html>
