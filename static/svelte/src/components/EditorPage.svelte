@@ -26,6 +26,7 @@
   let editingName = '';
   let isEditingTags = false;
   let newTagInput = '';
+  let showDeleteConfirm = false;
 
   function startEditingName() {
     isEditingName = true;
@@ -117,6 +118,27 @@
       stopRealTime();
     } else {
       startRealTime();
+    }
+  }
+
+  // Delete functionality
+  function showDeleteDialog() {
+    if (!canEdit || !$state.shader?.id) return;
+    showDeleteConfirm = true;
+  }
+
+  function hideDeleteDialog() {
+    showDeleteConfirm = false;
+  }
+
+  async function confirmDelete() {
+    try {
+      const { deleteShader } = await import('../adapters/workspaceAdapter.js');
+      await deleteShader();
+      hideDeleteDialog();
+    } catch (error) {
+      addConsoleMessage(`Delete failed: ${error.message}`, 'error');
+      hideDeleteDialog();
     }
   }
 
@@ -248,6 +270,16 @@
       <button on:click={onRun} disabled={$running || $initializing}>{$running ? 'Running…' : 'Run'}</button>
       <button on:click={onCompile} disabled={$initializing}>Compile</button>
       <button on:click={onToggleRealTime} disabled={$initializing}>{$realTimeRunning ? 'Pause' : 'Play'}</button>
+      {#if isAuthenticated && canEdit && $state.shader?.id}
+        <button 
+          class="delete-btn" 
+          on:click={showDeleteDialog} 
+          disabled={$saving || $initializing}
+          title="Delete shader"
+        >
+          <i class="fas fa-trash"></i> Delete
+        </button>
+      {/if}
     </div>
   </header>
   
@@ -269,6 +301,26 @@
     </div>
   </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+{#if showDeleteConfirm}
+  <div class="modal-overlay" on:click={hideDeleteDialog}>
+    <div class="modal-content" on:click|stopPropagation>
+      <div class="modal-header">
+        <h3>Delete Shader</h3>
+        <button class="modal-close" on:click={hideDeleteDialog}>×</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete <strong>"{$state.shader?.name}"</strong>?</p>
+        <p class="warning-text">This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" on:click={hideDeleteDialog}>Cancel</button>
+        <button class="btn-delete" on:click={confirmDelete}>Delete</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .svelte-editor { 
@@ -455,82 +507,13 @@
     font-size: 0.75rem;
   }
 
-  .title-and-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    flex: 1;
-  }
-
-  .title-group {
-    display: flex;
-    align-items: center;
-  }
-
-  .tags-section {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .tags-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-  }
-
-  .tag-pill {
-    background-color: #edf2f7;
-    color: #2d3748;
-    padding: 0.25rem 0.75rem;
-    border-radius: 1rem;
-    font-size: 0.875rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    border: 1px solid #e2e8f0;
-  }
-
-  .tag-remove {
-    background: none;
-    border: none;
-    color: #e53e3e;
-    cursor: pointer;
-    font-size: 1.1rem;
-    line-height: 1;
-    width: 16px;
-    height: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-  }
-
-  .tag-remove:hover {
-    background-color: #fed7d7;
-  }
-
-  .tag-input {
-    font-size: 0.875rem;
-    padding: 0.25rem 0.5rem;
-    border: 1px solid #cbd5e0;
-    border-radius: 0.25rem;
-    min-width: 100px;
-  }
-
-  .tag-input:focus {
-    outline: none;
-    border-color: #3182ce;
-    box-shadow: 0 0 0 1px #3182ce;
-  }
-
-  .add-tag-btn {
-    background-color: #4299e1;
+  /* Delete button styling */
+  .delete-btn {
+    background-color: #e53e3e;
     color: white;
-    padding: 0.25rem 0.75rem;
+    padding: 0.5rem 1rem;
     border: none;
-    border-radius: 1rem;
+    border-radius: 0.25rem;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -539,11 +522,16 @@
     transition: background-color 0.2s;
   }
 
-  .add-tag-btn:hover {
-    background-color: #3182ce;
+  .delete-btn:hover:not(:disabled) {
+    background-color: #c53030;
   }
 
-  .add-tag-btn i {
+  .delete-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .delete-btn i {
     font-size: 0.75rem;
   }
 
@@ -580,5 +568,91 @@
       font-size: 0.75rem;
       padding: 0.2rem 0.5rem;
     }
+  }
+
+  /* Modal styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .modal-content {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    width: 90%;
+    max-width: 500px;
+    padding: 1rem;
+    position: relative;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #718096;
+  }
+
+  .modal-body {
+    padding: 0.5rem 0;
+  }
+
+  .modal-body p {
+    margin: 0.5rem 0;
+  }
+
+  .warning-text {
+    color: #e53e3e;
+    font-weight: bold;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .btn-cancel {
+    background-color: #edf2f7;
+    color: #2d3748;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+  }
+
+  .btn-delete {
+    background-color: #e53e3e;
+    color: white;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
   }
 </style>

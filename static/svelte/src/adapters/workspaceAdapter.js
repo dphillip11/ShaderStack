@@ -876,6 +876,40 @@ fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
       console.warn('Auto-save failed:', error);
     }
   }
+
+  async deleteShader() {
+    try {
+      setSaving(true);
+      const state = get(editorState);
+      
+      if (!state.shader?.id) {
+        throw new Error('Cannot delete unsaved shader');
+      }
+
+      if (!this.currentProjectId) {
+        throw new Error('No project ID available for deletion');
+      }
+
+      // Import the delete function
+      const { deleteShaderProject } = await import('../stores/api.js');
+      
+      // Delete from backend
+      await deleteShaderProject(this.currentProjectId);
+      
+      addConsoleMessage('Shader deleted successfully', 'success');
+      
+      // Redirect to home page after successful deletion
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
+      
+    } catch (error) {
+      addConsoleMessage(`Delete failed: ${error.message}`, 'error');
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  }
 }
 
 // Global workspace instance
@@ -980,4 +1014,9 @@ if (typeof window !== 'undefined') {
 export async function updatePreview() {
   if (!workspace) throw new Error('Workspace not initialized');
   await workspace.updatePreviewForActiveScript();
+}
+
+export async function deleteShader() {
+  if (!workspace) throw new Error('Workspace not initialized');
+  await workspace.deleteShader();
 }
