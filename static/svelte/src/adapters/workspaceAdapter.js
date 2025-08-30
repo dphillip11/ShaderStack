@@ -807,8 +807,12 @@ fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
         addConsoleMessage('Shader project created successfully', 'success');
       }
 
-      // Update local state with any changes from the backend
-      setShader(savedProject);
+      // Preserve the current local name when updating from backend response
+      const currentName = state.shader.name;
+      setShader({
+        ...savedProject,
+        name: currentName || savedProject.name
+      });
       
     } catch (error) {
       addConsoleMessage(`Save failed: ${error.message}`, 'error');

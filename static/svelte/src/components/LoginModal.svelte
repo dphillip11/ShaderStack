@@ -34,13 +34,23 @@
     loading=true; error='';
     try { 
       await login(username.trim(), password); 
-      close(); 
+      
+      // Close modal immediately and wait for DOM update
+      show = false;
+      dispatch('close');
       dispatch('loggedIn');
-      // Refresh the page to update authentication state throughout the app
+      
+      // Wait a brief moment for the modal to actually disappear from DOM
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Then refresh the page to update authentication state throughout the app
       window.location.reload();
     }
-    catch(e){ error = e.message || 'Login failed'; }
-    loading=false;
+    catch(e){ 
+      error = e.message || 'Login failed'; 
+      loading=false;
+    }
+    // Don't set loading=false on success since we're reloading
   }
   function onKey(e){ if(e.key==='Escape') close(); if(e.key==='Enter') submit(); }
 </script>

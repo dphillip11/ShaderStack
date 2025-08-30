@@ -64,6 +64,7 @@ func writeSveltePage(w http.ResponseWriter, auth models.AuthenticationInfo, page
     authPayload, _ := json.Marshal(map[string]interface{}{
         "isAuthenticated": auth.IsAuthenticated,
         "username":        auth.Username,
+        "user_id":         auth.UserID,
     })
     
     html := strings.ReplaceAll(shellHTML, "window.__AUTH__=__AUTH__", "window.__AUTH__="+string(authPayload))
@@ -97,7 +98,22 @@ func RenderMy(w http.ResponseWriter, r *http.Request) {
         http.Redirect(w, r, "/", http.StatusSeeOther)
         return
     }
-    writeSveltePage(w, authInfo, "browse", "")
+    
+    // Get user's shaders using SearchShaders with UserID filter
+    searchParams := models.SearchParams{
+        UserID: authInfo.UserID,
+    }
+    userShaders := data.GetRepository().SearchShaders(searchParams)
+    
+    // Create inline JS to inject user's shaders data
+    shadersData, _ := json.Marshal(map[string]interface{}{
+        "shaders": userShaders,
+        "filter": "my",
+        "title": "My Shaders",
+    })
+    inline := fmt.Sprintf("window.myShaders=%s;", shadersData)
+    
+    writeSveltePage(w, authInfo, "browse", inline)
 }
 
 func RenderEditor(w http.ResponseWriter, r *http.Request) {

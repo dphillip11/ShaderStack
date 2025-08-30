@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { editorState, activeScript, addConsoleMessage, setActiveScript, updateScriptCode } from '../stores/editor.js';
+  import { editorState, activeScript, addConsoleMessage, setActiveScript, updateScriptCode, updateShaderName } from '../stores/editor.js';
+  import { auth } from '../stores/auth.js';
   import { initWorkspace, runAll, saveShader, compileActive, startRealTime, stopRealTime, isRealTimeRunning, startAutoSave, stopAutoSave } from '../adapters/workspaceAdapter.js';
   import ScriptTabs from './editor/ScriptTabs.svelte';
   import CodeEditor from './editor/CodeEditor.svelte';
@@ -14,6 +15,42 @@
   const running = derived(state, $s => $s.running);
   const initializing = derived(state, $s => $s.initializing);
   const realTimeRunning = isRealTimeRunning;
+
+  // Check if user is authenticated and owns the current shader
+  $: isAuthenticated = $auth.isAuthenticated;
+  $: currentUserId = $auth.user_id; // Assuming username is unique identifier
+  $: shaderOwnerId = $state.shader?.user_id || $state.shader?.user_id;
+  $: canEdit = isAuthenticated && (currentUserId === shaderOwnerId || !$state.shader?.id); // Can edit if owner or new shader
+
+  let isEditingName = false;
+  let editingName = '';
+
+  function startEditingName() {
+    isEditingName = true;
+    editingName = $state.shader?.name || 'New Shader';
+  }
+
+  function saveShaderName() {
+    if (editingName.trim() && editingName !== $state.shader?.name) {
+      // Update the shader name in the store using the proper function
+      updateShaderName(editingName.trim());
+      addConsoleMessage(`Shader name updated to "${editingName.trim()}"`, 'info');
+    }
+    isEditingName = false;
+  }
+
+  function cancelEditingName() {
+    isEditingName = false;
+    editingName = '';
+  }
+
+  function handleNameKeydown(e) {
+    if (e.key === 'Enter') {
+      saveShaderName();
+    } else if (e.key === 'Escape') {
+      cancelEditingName();
+    }
+  }
 
   function onRun(){ runAll().catch(e=>addConsoleMessage(e.message,'error')); }
   function onSave(){ saveShader().catch(e=>addConsoleMessage(e.message,'error')); }
@@ -79,11 +116,31 @@
 <div class="svelte-editor" data-initializing={$initializing}>
   <header class="editor-bar">
     <div class="title-group">
-      <h1>{$state.shader?.name || 'New Shader'}</h1>
-      {#if $state.shader?.id}<span class="id">#{$state.shader.id}</span>{/if}
+      {#if isEditingName && canEdit}
+        <input 
+          type="text" 
+          bind:value={editingName}
+          on:blur={saveShaderName}
+          on:keydown={handleNameKeydown}
+          class="name-input"
+          autofocus
+          placeholder="Shader name"
+        />
+      {:else}
+        <h1 on:click={canEdit ? startEditingName : null} 
+            class="editable-title" 
+            class:read-only={!canEdit}
+            title={canEdit ? "Click to edit name" : "Read-only (not your shader)"}>
+          {$state.shader?.name || 'New Shader'}
+          {#if canEdit}<i class="fas fa-edit edit-icon"></i>{/if}
+        </h1>
+      {/if}
+      {#if !canEdit && $state.shader?.id}<span class="read-only-badge">Read Only</span>{/if}
     </div>
     <div class="actions">
-      <button on:click={onSave} disabled={$saving || $initializing}>{$saving ? 'Saving…' : 'Save'}</button>
+      {#if isAuthenticated && canEdit}
+        <button on:click={onSave} disabled={$saving || $initializing}>{$saving ? 'Saving…' : 'Save'}</button>
+      {/if}
       <button on:click={onRun} disabled={$running || $initializing}>{$running ? 'Running…' : 'Run'}</button>
       <button on:click={onCompile} disabled={$initializing}>Compile</button>
       <button on:click={onToggleRealTime} disabled={$initializing}>{$realTimeRunning ? 'Pause' : 'Play'}</button>
@@ -198,5 +255,45 @@
       gap: 1rem;
       align-items: stretch;
     }
+  }
+
+  .editable-title {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+
+  .editable-title .edit-icon {
+    margin-left: 0.5rem;
+    font-size: 0.75rem;
+    color: #718096;
+  }
+
+  .editable-title.read-only {
+    cursor: default;
+    opacity: 0.7;
+  }
+
+  .read-only-badge {
+    background-color: #f56565;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+  }
+
+  .title-group {
+    display: flex;
+    align-items: center;
+  }
+
+  .name-input {
+    font-size: 1.5rem;
+    padding: 0.25rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 0.25rem;
+    width: 100%;
   }
 </style>

@@ -8,6 +8,12 @@
   let list = [];
   let tags = [];
   let filters;
+  let pageTitle = 'Browse Shaders';
+
+  // Check if we're on the "My Shaders" page
+  if (typeof window !== 'undefined' && window.myShaders) {
+    pageTitle = window.myShaders.title || 'My Shaders';
+  }
 
   const unsub = [
     filteredShaders.subscribe(v => list = v),
@@ -18,7 +24,15 @@
   onMount(() => () => unsub.forEach(u => u()));
 </script>
 
-<section class="browse-svelte" aria-label="Browse Shaders">
+<section class="browse-svelte" aria-label="{pageTitle}">
+  <div class="page-header">
+    <h1>{pageTitle}</h1>
+    {#if pageTitle === 'My Shaders'}
+      <p class="page-description">Your personal shader collection</p>
+    {:else}
+      <p class="page-description">Discover and explore community shaders</p>
+    {/if}
+  </div>
   <SearchBar {filters} />
   <TagFilters {tags} selected={filters.tags} />
   <ShaderGrid {list} />

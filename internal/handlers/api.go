@@ -193,6 +193,19 @@ func UpdateShader(w http.ResponseWriter, r *http.Request) {
         return
     }
     
+    // Get the existing shader to check ownership
+    existingShader := data.GetRepository().GetShaderByID(id)
+    if existingShader == nil {
+        http.Error(w, "Shader not found", http.StatusNotFound)
+        return
+    }
+    
+    // Check if user owns the shader
+    if existingShader.UserID != userID {
+        http.Error(w, "Forbidden: You can only edit your own shaders", http.StatusForbidden)
+        return
+    }
+    
     // Use the existing Shader model directly
     var shader models.Shader
     if err := json.NewDecoder(r.Body).Decode(&shader); err != nil {
@@ -222,6 +235,26 @@ func DeleteShader(w http.ResponseWriter, r *http.Request) {
     id, err := strconv.Atoi(vars["id"])
     if err != nil {
         http.Error(w, "Invalid shader ID", http.StatusBadRequest)
+        return
+    }
+    
+    // Get user ID from authentication middleware
+    userID, err := strconv.Atoi(r.Header.Get("X-User-ID"))
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+    
+    // Get the existing shader to check ownership
+    existingShader := data.GetRepository().GetShaderByID(id)
+    if existingShader == nil {
+        http.Error(w, "Shader not found", http.StatusNotFound)
+        return
+    }
+    
+    // Check if user owns the shader
+    if existingShader.UserID != userID {
+        http.Error(w, "Forbidden: You can only delete your own shaders", http.StatusForbidden)
         return
     }
     

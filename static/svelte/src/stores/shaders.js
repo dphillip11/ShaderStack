@@ -35,6 +35,25 @@ export const availableTags = derived([tags, shaders], ([explicit, all]) => {
 let loaded = false;
 export async function loadInitialShaders() {
   if (loaded) return;
+  
+  // Check if we're on the "My Shaders" page with pre-loaded data
+  if (typeof window !== 'undefined' && window.myShaders) {
+    const myData = window.myShaders;
+    shaders.set(myData.shaders || []);
+    // For "My Shaders" page, we don't need to load all tags from API
+    // Just extract tags from the user's shaders
+    const userTags = new Set();
+    myData.shaders.forEach(shader => {
+      (shader.tags || shader.Tags || []).forEach(tag => {
+        userTags.add(tag.name || tag.Name);
+      });
+    });
+    tags.set(Array.from(userTags).sort().map(name => ({ name })));
+    syncFiltersFromURL();
+    loaded = true;
+    return;
+  }
+  
   try {
     const [shaderData, tagData] = await Promise.all([
       apiGet('/api/shaders'),
