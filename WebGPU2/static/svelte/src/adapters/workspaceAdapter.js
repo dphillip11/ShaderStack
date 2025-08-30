@@ -97,7 +97,16 @@ class ScriptEngine {
     this.device = device;
     this.shaderCompiler = shaderCompiler;
     this.scripts = new Map(); // scriptId -> { bufferSpec, renderPipeline, buffer, uniformBuffer, bindGroup }
-    this.uniformData = new Float32Array(8); // time, mouseX, mouseY, resX, resY, frame, padding, padding
+    
+    // Fix uniform buffer alignment for WebGPU
+    // struct Uniforms {
+    //     time: f32,           // offset 0,  size 4
+    //     mouse: vec2<f32>,    // offset 8,  size 8 (requires 8-byte alignment)
+    //     resolution: vec2<f32>, // offset 16, size 8 (requires 8-byte alignment)  
+    //     frame: u32,          // offset 24, size 4
+    // }
+    // Total size: 28 bytes, but we need to pad to 32 bytes (16-byte alignment for uniform buffers)
+    this.uniformData = new Float32Array(8); // 32 bytes total
     this.frame = 0;
     this.mousePos = { x: 0, y: 0 };
     this.startTime = performance.now();
@@ -246,14 +255,18 @@ class ScriptEngine {
     }
 
     try {
-      // Update uniforms
+      // Update uniforms with correct alignment
       const currentTime = (performance.now() - this.startTime) / 1000;
-      this.uniformData[0] = currentTime;
-      this.uniformData[1] = this.mousePos.x;
-      this.uniformData[2] = this.mousePos.y;
-      this.uniformData[3] = script.bufferSpec.width || 512;
-      this.uniformData[4] = script.bufferSpec.height || 512;
-      this.uniformData[5] = this.frame;
+      
+      // Properly aligned uniform data:
+      this.uniformData[0] = currentTime;                    // time: f32 at offset 0
+      this.uniformData[1] = 0;                             // padding to align mouse to 8-byte boundary
+      this.uniformData[2] = this.mousePos.x;              // mouse.x: f32 at offset 8
+      this.uniformData[3] = this.mousePos.y;              // mouse.y: f32 at offset 12
+      this.uniformData[4] = script.bufferSpec.width || 512;  // resolution.x: f32 at offset 16
+      this.uniformData[5] = script.bufferSpec.height || 512; // resolution.y: f32 at offset 20
+      this.uniformData[6] = this.frame;                    // frame: u32 at offset 24
+      this.uniformData[7] = 0;                             // padding to 32 bytes
 
       this.device.queue.writeBuffer(script.uniformBuffer, 0, this.uniformData);
 

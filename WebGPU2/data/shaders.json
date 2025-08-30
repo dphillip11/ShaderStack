@@ -40,11 +40,11 @@
   {
     "id": 3,
     "user_id": 3,
-    "name": "Animated Color Shader",
+    "name": "",
     "shader_scripts": [
       {
         "id": 4,
-        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    var pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    // Sample from previous scripts if available\n    // let previousColor = textureSample(buffer1, buffer1_sampler, uv);\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(u.time));\n    return vec4\u003cf32\u003e(color, 1.0);\n}",
+        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    var pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    // Sample from previous scripts if available\n    // let previousColor = textureSample(buffer1, buffer1_sampler, uv);\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(u.time));\n    return vec4\u003cf32\u003e(u.mouse.x, u.mouse.y, sin(5.0 * u.time),1.0);\n}",
         "buffer": {
           "format": "rgba8unorm",
           "width": 512,
@@ -59,16 +59,6 @@
           "width": 512,
           "height": 512
         }
-      }
-    ],
-    "tags": [
-      {
-        "id": 1,
-        "name": "fragment"
-      },
-      {
-        "id": 5,
-        "name": "animation"
       }
     ]
   }
