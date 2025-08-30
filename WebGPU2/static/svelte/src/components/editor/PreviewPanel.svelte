@@ -1,86 +1,5 @@
 <script>
   import { editorState } from '../../stores/editor.js';
-  import { onMount, onDestroy } from 'svelte';
-  
-  let workspace = null;
-  let lastActiveScriptId = null;
-  let unsubscribe;
-  
-  // Subscribe to editor state to watch for active script changes
-  unsubscribe = editorState.subscribe(state => {
-    // When active script changes, update the preview to show that script's output
-    if (state.activeScriptId !== lastActiveScriptId) {
-      updatePreviewForActiveScript(state.activeScriptId);
-      lastActiveScriptId = state.activeScriptId;
-    }
-  });
-  
-  // Get workspace reference
-  function getWorkspace() {
-    return window.__workspaceRef;
-  }
-  
-  // Update preview to show the active script's buffer output
-  function updatePreviewForActiveScript(scriptId) {
-    const currentWorkspace = getWorkspace();
-    
-    if (currentWorkspace && scriptId) {
-      console.log('PreviewPanel: Updating preview to show script:', scriptId);
-      try {
-        // Show the buffer output for the specified script in the preview canvas
-        currentWorkspace.showBufferVisualization(scriptId, 'texture');
-        console.log('PreviewPanel: Successfully called showBufferVisualization for script:', scriptId);
-      } catch (error) {
-        console.warn('PreviewPanel: Failed to update preview for script', scriptId, ':', error);
-      }
-    } else {
-      console.log('PreviewPanel: No workspace or scriptId available', { workspace: !!currentWorkspace, scriptId });
-    }
-  }
-  
-  onMount(() => {
-    workspace = getWorkspace();
-    
-    // Listen for script execution events
-    if (workspace && workspace.scriptEngine) {
-      const handleAllScriptsExecuted = () => {
-        console.log('PreviewPanel: handleAllScriptsExecuted fired');
-        // After all scripts run, show the active script's output in the preview
-        const currentState = $editorState;
-        console.log('PreviewPanel: Current editor state:', currentState);
-        console.log('PreviewPanel: Active script ID:', currentState.activeScriptId);
-        
-        if (currentState.activeScriptId) {
-          console.log('PreviewPanel: Updating preview for real-time execution');
-          // During real-time execution, update immediately without delay
-          updatePreviewForActiveScript(currentState.activeScriptId);
-        } else {
-          console.warn('PreviewPanel: No active script ID found');
-        }
-      };
-      
-      workspace.scriptEngine.addEventListener('allScriptsExecuted', handleAllScriptsExecuted);
-      
-      // Initial preview update
-      const currentState = $editorState;
-      if (currentState.activeScriptId) {
-        updatePreviewForActiveScript(currentState.activeScriptId);
-      }
-      
-      // Store cleanup function
-      return () => {
-        if (workspace && workspace.scriptEngine) {
-          workspace.scriptEngine.removeEventListener('allScriptsExecuted', handleAllScriptsExecuted);
-        }
-      };
-    }
-  });
-  
-  onDestroy(() => {
-    if (unsubscribe) {
-      unsubscribe();
-    }
-  });
 </script>
 
 <div class="preview-panel">
@@ -97,7 +16,7 @@
   </div>
   <div class="preview-content">
     <div class="webgpu-canvas-container">
-      <canvas id="webgpu-canvas" width="400" height="400" aria-label="WebGPU preview"></canvas>
+      <canvas id="webgpu-canvas" width="512" height="512" aria-label="WebGPU preview"></canvas>
       {#if !$editorState.activeScriptId}
         <div id="canvas-overlay">
           <div>No script selected</div>

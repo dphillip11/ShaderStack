@@ -3,6 +3,7 @@
   import BrowsePage from './components/BrowsePage.svelte';
   import EditorPage from './components/EditorPage.svelte';
   import { shaders, loadInitialShaders } from './stores/shaders.js';
+  import { setShader, replaceAllScripts } from './stores/editor.js';
 
   let page = 'browse';
 
@@ -19,6 +20,22 @@
     if(page !== p){ page = p; }
   }
 
+  function initializeEditorData() {
+    // Initialize editor with shader data from the backend if available
+    if (window.shaderData && page === 'editor') {
+      console.log('App.svelte: Initializing editor with shader data:', window.shaderData);
+      
+      // Set the shader data in the editor state
+      setShader(window.shaderData);
+      
+      // Set the scripts array from shader_scripts
+      const scripts = window.shaderData.shader_scripts || [];
+      replaceAllScripts(scripts);
+      
+      console.log('App.svelte: Editor initialized with', scripts.length, 'scripts');
+    }
+  }
+
   onMount(() => {
     console.log('App.svelte onMount - window.__AUTH__:', window.__AUTH__);
     console.log('App.svelte onMount - window.__PAGE__:', window.__PAGE__);
@@ -26,12 +43,17 @@
     
     if (window.__PAGE__) page = window.__PAGE__;
     else setPageFromLocation();
+    
+    // Initialize editor data first, then load shaders for browse page
+    initializeEditorData();
+    
     if (page === 'browse') loadInitialShaders();
     window.addEventListener('popstate', setPageFromLocation);
     // Removed click interception for now to allow full page loads (ensures shaderData + auth state)
   });
 
   $: if (page === 'browse') { /* ensure shaders loaded when returning */ loadInitialShaders(); }
+  $: if (page === 'editor') { /* ensure editor data loaded when switching to editor */ initializeEditorData(); }
 </script>
 
 {#if page === 'browse'}

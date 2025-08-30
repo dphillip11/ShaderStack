@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { editorState, activeScript, addConsoleMessage, setActiveScript, updateScriptCode } from '../stores/editor.js';
-  import { initWorkspace, runAll, saveShader, compileActive, startRealTime, stopRealTime, isRealTimeRunning } from '../adapters/workspaceAdapter.js';
+  import { initWorkspace, runAll, saveShader, compileActive, startRealTime, stopRealTime, isRealTimeRunning, startAutoSave, stopAutoSave } from '../adapters/workspaceAdapter.js';
   import ScriptTabs from './editor/ScriptTabs.svelte';
   import CodeEditor from './editor/CodeEditor.svelte';
   import PreviewPanel from './editor/PreviewPanel.svelte';
@@ -60,13 +60,18 @@
   }
 
   onMount(() => { 
-    initWorkspace();
+    initWorkspace().then(() => {
+      // Start auto-save once workspace is initialized
+      startAutoSave();
+      addConsoleMessage('Auto-save enabled', 'info');
+    });
     
     // Cleanup on component destroy
     return () => {
       if (isResizing) {
         stopResize();
       }
+      stopAutoSave();
     };
   });
 </script>

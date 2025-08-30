@@ -1,11 +1,38 @@
 <script>
   import { editorState, setActiveScript, updateScriptBuffer, deleteScript } from '../../stores/editor.js';
-  import { addScript } from '../../adapters/workspaceAdapter.js';
+  import { addScript, updatePreview } from '../../adapters/workspaceAdapter.js';
   import BufferControls from './BufferControls.svelte';
   
   let state;
   const unsubscribe = editorState.subscribe(s => state = s);
-  function select(id){ setActiveScript(id); }
+  
+  async function select(id) { 
+    setActiveScript(id);
+    // Compile and execute the script when switching tabs, then update preview
+    try {
+      const workspace = window.__workspaceRef;
+      if (workspace && workspace.scriptEngine) {
+        const script = state?.scripts?.find(s => s.id === id);
+        
+        if (script) {
+          // Check if script is already compiled
+          if (!workspace.scriptEngine.scripts.has(id)) {
+            // Compile the script first
+            await workspace.compileScript(id, script.code, script.buffer);
+          }
+          
+          // Execute the script to generate fresh output
+          await workspace.scriptEngine.executeScript(id);
+          
+          // Update preview
+          await updatePreview();
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to compile/execute script when switching tabs:', error);
+    }
+  }
+  
   function add(){ addScript(); }
   
   $: scripts = state?.scripts || [];

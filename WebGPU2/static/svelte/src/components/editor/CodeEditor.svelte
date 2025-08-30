@@ -1,6 +1,6 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-  import { editorState, updateScriptCode } from '../../stores/editor.js';
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { editorState, updateScriptCode, addConsoleMessage } from '../../stores/editor.js';
   export let script = null; // { id, code }
   const dispatch = createEventDispatcher();
   
@@ -28,12 +28,14 @@
   let lastScriptId = null;
   let injectedCode = '';
   let showInjectedCode = false;
+  let errors = [];
+  let textareaElement;
   
   // Only update localCode when script changes, not during editing
   $: if (script && script.id !== lastScriptId) {
     localCode = decodeCode(script.code) || '';
     lastScriptId = script.id;
-    // Update injected code when script changes
+    errors = []; // Clear errors when switching scripts
     updateInjectedCodePreview();
   }
 
@@ -74,6 +76,42 @@
     updateInjectedCodePreview();
   }
 
+  // Listen for compilation errors from the store
+  $: if ($editorState.consoleMessages) {
+    const latestErrors = $editorState.consoleMessages
+      .filter(msg => msg.type === 'error' && msg.text.includes(`Script ${script?.id}`))
+      .slice(-5); // Keep only latest 5 errors
+    
+    errors = extractLineNumbers(latestErrors);
+  }
+
+  function extractLineNumbers(errorMessages) {
+    const lineErrors = [];
+    errorMessages.forEach(msg => {
+      const lineMatch = msg.text.match(/Line (\d+):/);
+      if (lineMatch) {
+        lineErrors.push({
+          line: parseInt(lineMatch[1]),
+          message: msg.text
+        });
+      }
+    });
+    return lineErrors;
+  }
+
+  function highlightErrorLines() {
+    if (!textareaElement || errors.length === 0) return;
+    
+    // This is a basic implementation - in a real editor you'd want syntax highlighting
+    const lines = localCode.split('\n');
+    errors.forEach(error => {
+      if (error.line > 0 && error.line <= lines.length) {
+        // Add error indication - could be enhanced with line highlighting
+        console.log(`Error at line ${error.line}: ${error.message}`);
+      }
+    });
+  }
+
   let timeout;
   function onInput() {
     if (!script) return;
@@ -94,6 +132,36 @@
       updateInjectedCodePreview();
     }
   }
+
+  // Auto-compile on Ctrl+Enter
+  function handleKeyDown(event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      compileCurrentScript();
+    }
+  }
+
+  async function compileCurrentScript() {
+    if (!script) return;
+    
+    try {
+      const workspace = window.__workspaceRef;
+      if (workspace && workspace.compileActiveScript) {
+        await workspace.compileActiveScript();
+      }
+    } catch (error) {
+      addConsoleMessage(`Compilation failed: ${error.message}`, 'error');
+    }
+  }
+
+  onMount(() => {
+    highlightErrorLines();
+  });
+
+  // Re-highlight when errors change
+  $: if (errors) {
+    highlightErrorLines();
+  }
 </script>
 
 <div class="code-editor-container">
@@ -101,14 +169,44 @@
     <div class="code-section">
       <div class="section-header">
         <h4>Your Shader Code</h4>
+        <div class="editor-hints">
+          <span class="hint">Ctrl+Enter to compile</span>
+          {#if errors.length > 0}
+            <span class="error-count">{errors.length} error{errors.length > 1 ? 's' : ''}</span>
+          {/if}
+        </div>
       </div>
+      
+      {#if errors.length > 0}
+        <div class="error-summary">
+          {#each errors as error}
+            <div class="error-item">
+              <span class="error-line">Line {error.line}:</span>
+              <span class="error-message">{error.message.split(':').slice(1).join(':').trim()}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+      
       <textarea 
+        bind:this={textareaElement}
         class="code-editor" 
+        class:has-errors={errors.length > 0}
         bind:value={localCode} 
-        on:input={onInput} 
+        on:input={onInput}
+        on:keydown={handleKeyDown}
         spellcheck="false" 
         aria-label="WGSL code editor"
-        placeholder="Enter your WGSL shader code here..."></textarea>
+        placeholder="Enter your WGSL shader code here...
+
+// Available uniforms:
+// u.time - elapsed time in seconds
+// u.mouse - mouse position (0-1, 0-1)
+// u.resolution - buffer resolution
+// u.frame - frame counter
+
+// Available textures (from other scripts):
+// buffer1, buffer2, etc. with corresponding samplers"></textarea>
     </div>
     
     <div class="injected-section">
@@ -151,12 +249,66 @@
     background-color: #f8fafc;
     border-bottom: 1px solid #e2e8f0;
     font-size: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .section-header h4 {
     margin: 0;
     color: #2d3748;
     font-weight: 600;
+  }
+
+  .editor-hints {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .hint {
+    font-size: 0.75rem;
+    color: #718096;
+    background: #edf2f7;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+  }
+
+  .error-count {
+    font-size: 0.75rem;
+    color: #e53e3e;
+    background: #fed7d7;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .error-summary {
+    background-color: #fed7d7;
+    border-bottom: 1px solid #e53e3e;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .error-item {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid #feb2b2;
+    font-size: 0.8rem;
+  }
+
+  .error-item:last-child {
+    border-bottom: none;
+  }
+
+  .error-line {
+    color: #c53030;
+    font-weight: 600;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  }
+
+  .error-message {
+    color: #742a2a;
+    margin-left: 0.5rem;
   }
 
   .injected-header {
@@ -207,10 +359,15 @@
     color: #e2e8f0;
     border: none;
     outline: none;
+    transition: border-left 0.2s ease;
   }
 
   .code-editor:focus {
     background: #2d3748;
+  }
+
+  .code-editor.has-errors {
+    border-left: 4px solid #e53e3e;
   }
 
   .injected-section {
@@ -257,6 +414,12 @@
     
     .injected-code-container {
       max-height: 150px;
+    }
+
+    .editor-hints {
+      flex-direction: column;
+      gap: 0.5rem;
+      align-items: flex-end;
     }
   }
 </style>

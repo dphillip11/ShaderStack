@@ -1,122 +1,12 @@
 [
   {
-    "id": 12,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
+    "id": 1,
+    "user_id": 1,
+    "name": "Basic Fragment Shader",
     "shader_scripts": [
       {
-        "id": 0,
-        "code": "@fragment\nfn main() -\u003e @location(0) vec4\u003cf32\u003e {\n    return vec4\u003cf32\u003e(1.0, 1.0, 0.0, 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      }
-    ]
-  },
-  {
-    "id": 15,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
-    "shader_scripts": [
-      {
-        "id": 0,
-        "code": "@fragment\nfn main() -\u003e @location(0) vec4\u003cf32\u003e {\n    return vec4\u003cf32\u003e(1.0, sin(time), 0.0, 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      }
-    ]
-  },
-  {
-    "id": 17,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
-    "shader_scripts": [
-      {
-        "id": 2,
-        "code": "@fragment\nfn main(@builtin(position) fragCoord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    return vec4\u003cf32\u003e(0.0,0.0, sin(time * 0.1), 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      }
-    ]
-  },
-  {
-    "id": 11,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
-    "shader_scripts": [
-      {
-        "id": 0,
-        "code": "@fragment\nfn main() -\u003e @location(0) vec4\u003cf32\u003e {\n    return vec4\u003cf32\u003e(1.0, 1.0, 0.0, 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      }
-    ]
-  },
-  {
-    "id": 4,
-    "user_id": 3,
-    "name": "Procedural Noisiest",
-    "shader_scripts": null,
-    "tags": [
-      {
-        "id": 0,
-        "name": "fragment"
-      },
-      {
-        "id": 0,
-        "name": "procedural"
-      },
-      {
-        "id": 0,
-        "name": "texture"
-      }
-    ]
-  },
-  {
-    "id": 6,
-    "user_id": 3,
-    "name": "Compute Particle System",
-    "shader_scripts": null,
-    "tags": [
-      {
-        "id": 0,
-        "name": "compute"
-      },
-      {
-        "id": 0,
-        "name": "particle"
-      },
-      {
-        "id": 0,
-        "name": "animation"
-      }
-    ]
-  },
-  {
-    "id": 14,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
-    "shader_scripts": null
-  },
-  {
-    "id": 5,
-    "user_id": 4,
-    "name": "Basic Lighting Model",
-    "shader_scripts": [
-      {
-        "id": 5,
-        "code": "struct VertexInput {\n    @location(0) position: vec3\u003cf32\u003e,\n    @location(1) normal: vec3\u003cf32\u003e,\n};\n\nstruct VertexOutput {\n    @builtin(position) clip_position: vec4\u003cf32\u003e,\n    @location(0) world_normal: vec3\u003cf32\u003e,\n};\n\n@vertex\nfn vs_main(input: VertexInput) -\u003e VertexOutput {\n    var out: VertexOutput;\n    out.clip_position = vec4\u003cf32\u003e(input.position, 1.0);\n    out.world_normal = input.normal;\n    return out;\n}\n\n@fragment\nfn fs_main(input: VertexOutput) -\u003e @location(0) vec4\u003cf32\u003e {\n    let light_dir = normalize(vec3\u003cf32\u003e(1.0, 1.0, 1.0));\n    let normal = normalize(input.world_normal);\n    let diffuse = max(dot(normal, light_dir), 0.0);\n    let color = vec3\u003cf32\u003e(0.8, 0.6, 0.4) * diffuse;\n    return vec4\u003cf32\u003e(color, 1.0);\n}",
+        "id": 1,
+        "code": "precision mediump float;\nvoid main() {\n  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n}",
         "buffer": {
           "format": "",
           "width": 0,
@@ -128,156 +18,46 @@
       {
         "id": 1,
         "name": "fragment"
-      },
-      {
-        "id": 2,
-        "name": "vertex"
-      },
-      {
-        "id": 7,
-        "name": "lighting"
-      }
-    ]
-  },
-  {
-    "id": 18,
-    "user_id": 3,
-    "name": "Untitled Shader",
-    "shader_scripts": [
-      {
-        "id": 1,
-        "code": "",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      },
-      {
-        "id": 2,
-        "code": "",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      },
-      {
-        "id": 3,
-        "code": "",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      },
-      {
-        "id": 4,
-        "code": "",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      }
-    ]
-  },
-  {
-    "id": 16,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
-    "shader_scripts": [
-      {
-        "id": 0,
-        "code": "@fragment\nfn main(@builtin(position) fragCoord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    return vec4\u003cf32\u003e(sin(time * 100.0));\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      },
-      {
-        "id": 1,
-        "code": "@fragment\nfn main(@builtin(position) fragCoord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    return vec4\u003cf32\u003e(1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      },
-      {
-        "id": 2,
-        "code": "@fragment\nfn main(@builtin(position) fragCoord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = fragCoord.xy / vec2\u003cf32\u003e(512.0, 512.0);\n    return vec4\u003cf32\u003e(sin(time));\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
       }
     ]
   },
   {
     "id": 2,
-    "user_id": 2,
-    "name": "Simple Vertex Shader",
+    "user_id": 3,
+    "name": "",
     "shader_scripts": [
       {
         "id": 2,
-        "code": "@vertex\nfn main(@location(0) position: vec4\u003cf32\u003e) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    return position;\n}",
+        "code": "attribute vec4 position;\nvoid main() {\n  gl_Position = position;\n\n}",
         "buffer": {
-          "format": "",
-          "width": 0,
-          "height": 0
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
         }
-      }
-    ],
-    "tags": [
-      {
-        "id": 2,
-        "name": "vertex"
-      }
-    ]
-  },
-  {
-    "id": 8,
-    "user_id": 3,
-    "name": "New Shader",
-    "shader_scripts": null,
-    "tags": [
-      {
-        "id": 0,
-        "name": "new"
-      },
-      {
-        "id": 0,
-        "name": "first"
-      },
-      {
-        "id": 0,
-        "name": "pbr"
-      },
-      {
-        "id": 0,
-        "name": "newerer"
-      },
-      {
-        "id": 0,
-        "name": "TESTING"
       }
     ]
   },
   {
     "id": 3,
-    "user_id": 1,
-    "name": "Animated Color Wave",
+    "user_id": 3,
+    "name": "Animated Color Shader",
     "shader_scripts": [
       {
-        "id": 3,
-        "code": "struct Uniforms {\n    time: f32,\n};\n\n@group(0) @binding(0) var\u003cuniform\u003e uniforms: Uniforms;\n\n@fragment\nfn main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / 800.0;\n    let r = sin(uniforms.time + uv.x * 3.14159) * 0.5 + 0.5;\n    let g = cos(uniforms.time + uv.y * 3.14159) * 0.5 + 0.5;\n    let b = sin(uniforms.time * 2.0) * 0.5 + 0.5;\n    return vec4\u003cf32\u003e(r, g, b, 1.0);\n}",
+        "id": 4,
+        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    var pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    // Sample from previous scripts if available\n    // let previousColor = textureSample(buffer1, buffer1_sampler, uv);\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(u.time));\n    return vec4\u003cf32\u003e(color, 1.0);\n}",
         "buffer": {
-          "format": "",
-          "width": 0,
-          "height": 0
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
+        }
+      },
+      {
+        "id": 5,
+        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    var pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    // Sample from previous scripts if available\n    let previousColor = textureSample(buffer4, buffer4_sampler, uv);\n    let color = previousColor * 0.5;\n    return vec4\u003cf32\u003e(color);\n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
         }
       }
     ],
@@ -289,114 +69,6 @@
       {
         "id": 5,
         "name": "animation"
-      }
-    ]
-  },
-  {
-    "id": 10,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
-    "shader_scripts": [
-      {
-        "id": 0,
-        "code": "@fragment\nfn main() -\u003e @location(0) vec4\u003cf32\u003e {\n    return vec4\u003cf32\u003e(1.0, 1.0, 0.0, 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      }
-    ]
-  },
-  {
-    "id": 7,
-    "user_id": 3,
-    "name": "PBR Material",
-    "shader_scripts": null,
-    "tags": [
-      {
-        "id": 0,
-        "name": "fragment"
-      },
-      {
-        "id": 0,
-        "name": "lighting"
-      },
-      {
-        "id": 0,
-        "name": "pbr"
-      }
-    ]
-  },
-  {
-    "id": 1,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
-    "shader_scripts": [
-      {
-        "id": 0,
-        "code": "@fragment\nfn main(@builtin(position) fragCoord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = fragCoord.xy / vec2\u003cf32\u003e(512.0, 512.0);\n    return vec4\u003cf32\u003e(uv, 0.5, 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      },
-      {
-        "id": 1,
-        "code": "@fragment\nfn main(@builtin(position) fragCoord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = fragCoord.xy / vec2\u003cf32\u003e(512.0, 512.0);\n    return vec4\u003cf32\u003e(uv, 0.25, 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      }
-    ],
-    "tags": [
-      {
-        "id": 0,
-        "name": "fragment"
-      }
-    ]
-  },
-  {
-    "id": 9,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
-    "shader_scripts": [
-      {
-        "id": 0,
-        "code": "@fragment\nfn main(@builtin(position) fragCoord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = fragCoord.xy / vec2\u003cf32\u003e(512.0, 512.0);\n    return vec4\u003cf32\u003e(uv, 0.5, 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      },
-      {
-        "id": 1756038241577,
-        "code": "@fragment\nfn main(@builtin(position) fragCoord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = fragCoord.xy / vec2\u003cf32\u003e(512.0, 512.0);\n    return vec4\u003cf32\u003e(uv, 0.5, 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
-      }
-    ]
-  },
-  {
-    "id": 13,
-    "user_id": 3,
-    "name": "Basic Red Fragment",
-    "shader_scripts": [
-      {
-        "id": 0,
-        "code": "@fragment\nfn main() -\u003e @location(0) vec4\u003cf32\u003e {\n    return vec4\u003cf32\u003e(1.0, 1.0, 0.0, 1.0);\n}",
-        "buffer": {
-          "format": "rgba8unorm",
-          "width": 512,
-          "height": 512
-        }
       }
     ]
   }
