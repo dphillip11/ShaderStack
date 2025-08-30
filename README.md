@@ -1,6 +1,6 @@
-# WebGPU Shader Hub
+# Shader Stack
 
-Modernized Go + Svelte application for browsing and editing WebGPU (WGSL) shaders.
+Go + Svelte application for browsing and editing WebGPU (WGSL) shaders.
 
 ./build_and_run.sh to build and run
 
