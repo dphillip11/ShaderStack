@@ -1,64 +1,79 @@
 <script>
-  import { toggleTag, clearAllFilters } from '../stores/shaders.js';
+  import { toggleTag, clearAllFilters, selectedTagsSet, shaderFilters } from '../stores/shaders.js';
+  
   export let tags = [];
-  export let selected = [];
-  function isActive(t){ return selected.includes(t); }
+  
+  // Use the Set-based store for O(1) lookups and better reactivity
+  $: isActive = (tag) => $selectedTagsSet.has(tag);
+  $: selectedCount = $shaderFilters.tags.length;
 </script>
 
 <div class="tag-filters" aria-label="Tag filters">
   {#each tags as t}
     <button type="button"
-            class="tag tag-filter {isActive(t) ? 'active' : ''}"
+            class="tag-filter {isActive(t) ? 'active' : ''}"
             aria-pressed={isActive(t)}
             on:click={() => toggleTag(t)}>{t}</button>
   {/each}
-  {#if selected.length}
+  {#if selectedCount > 0}
     <button type="button" class="clear-all" on:click={clearAllFilters}>Clear Tags</button>
   {/if}
 </div>
 
 <style>
-  .tag-filters { display:flex; flex-wrap:wrap; gap:.5rem; }
-  .tag-filter { cursor:pointer; }
-  .tag-filter.active { background: var(--accent, #444); color:#fff; }
-  .clear-all { margin-left:auto; font-size:.8rem; }
-
-  .filter-section {
+  .tag-filters { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 0.5rem; 
     margin-bottom: 1.5rem;
-  }
-
-  .filter-section label {
-    display: block;
-    margin-bottom: 0.75rem;
-    font-weight: 600;
-    color: #2d3748;
-  }
-
-  .tag-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
   }
 
   .tag-filter {
     cursor: pointer;
-    transition: all 0.3s;
-    background-color: #e2e8f0;
-    color: #4a5568;
-    padding: 0.25rem 0.75rem;
-    border-radius: 15px;
-    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    background-color: #f7fafc;
+    color: #718096;
+    padding: 0.5rem 1rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 20px;
+    font-size: 0.875rem;
     font-weight: 500;
+    user-select: none;
   }
 
   .tag-filter:hover {
-    transform: scale(1.05);
-    background-color: #cbd5e0;
+    background-color: #edf2f7;
+    border-color: #cbd5e0;
+    transform: translateY(-1px);
   }
 
   .tag-filter.active {
-    background-color: #667eea;
+    background-color: #3182ce;
     color: white;
-    transform: scale(1.05);
+    border-color: #2c5aa0;
+    box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
+    transform: translateY(-1px);
+  }
+
+  .tag-filter.active:hover {
+    background-color: #2c5aa0;
+    border-color: #2a4a8b;
+  }
+
+  .clear-all { 
+    margin-left: auto; 
+    font-size: 0.8rem;
+    background-color: #fed7d7;
+    color: #c53030;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid #feb2b2;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .clear-all:hover {
+    background-color: #fbb6ce;
+    border-color: #f687b3;
   }
 </style>

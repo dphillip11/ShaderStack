@@ -8,6 +8,9 @@ export const tags = writable([]);
 // Filter criteria (single source of truth for browse page state)
 export const shaderFilters = writable({ name: '', tags: [] });
 
+// Derived: Set of selected tags for O(1) lookup and better reactivity
+export const selectedTagsSet = derived(shaderFilters, $filters => new Set($filters.tags));
+
 // Derived: filtered shaders applying current filters
 export const filteredShaders = derived([shaders, shaderFilters], ([all, f]) => {
   const searchQuery = f.name.trim().toLowerCase();

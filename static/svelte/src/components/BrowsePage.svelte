@@ -71,7 +71,7 @@
     {/if}
   </div>
   <SearchBar {filters} />
-  <TagFilters {tags} selected={filters.tags} />
+  <TagFilters {tags} />
   <ShaderGrid {list} on:delete={handleShaderDelete} />
 </section>
 

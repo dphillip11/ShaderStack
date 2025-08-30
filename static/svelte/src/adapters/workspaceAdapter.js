@@ -807,11 +807,13 @@ fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
         addConsoleMessage('Shader project created successfully', 'success');
       }
 
-      // Preserve the current local name when updating from backend response
+      // Preserve the current local name and user_id when updating from backend response
       const currentName = state.shader.name;
+      const currentUserId = state.shader.user_id;
       setShader({
         ...savedProject,
-        name: currentName || savedProject.name
+        name: currentName || savedProject.name,
+        user_id: currentUserId || savedProject.user_id
       });
       
     } catch (error) {
