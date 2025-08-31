@@ -61,6 +61,8 @@ export const authActions = {
 
     try {
       const result = await api.login(credentials);
+      
+      // Batch all login-related state updates into a single update to minimize re-renders
       updateAppState(state => ({
         ...state,
         auth: {
@@ -77,11 +79,18 @@ export const authActions = {
             ...state.ui.modals,
             login: { show: false }
           }
+          // Note: Notifications are skipped for editor page to prevent WebGPU disruption
         }
       }));
 
-      // Add success notification
-      uiActions.addNotification('Login successful!', 'success');
+      // Only show success notification if not on editor page to avoid disrupting WebGPU workspace
+      const currentState = get(appState);
+      if (currentState.navigation.currentPage !== 'editor') {
+        // Use setTimeout to defer notification to next tick, preventing immediate re-render
+        setTimeout(() => {
+          uiActions.addNotification('Login successful!', 'success');
+        }, 0);
+      }
     } catch (error) {
       updateAppState(state => ({
         ...state,

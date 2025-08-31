@@ -69,6 +69,10 @@ export const appState = writable(initialState);
 // Helper function to update state immutably
 export function updateAppState(updater) {
   appState.update(updater);
+  // Temporarily disable debug logging to prevent performance issues during state updates
+  // if (DEBUG) {
+  //   console.log('State updated:', get(appState));
+  // }
 }
 
 // Debug helper to log state changes

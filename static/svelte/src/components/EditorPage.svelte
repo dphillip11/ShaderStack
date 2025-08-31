@@ -30,12 +30,30 @@
   $: saving = $editorSaving;
   $: running = $editorRunning;
   $: initializing = $editorInitializing;
-  $: authenticated = $isAuthenticated;
-  $: currentUserId = $authUserId;
   
-  // Check permissions
-  $: shaderOwnerId = shader?.user_id || shader?.UserID;
-  $: canEdit = authenticated && (currentUserId === shaderOwnerId || !shader?.id);
+  // Defer auth-related reactive statements to prevent disruption during login
+  let authenticated = false;
+  let currentUserId = null;
+  let canEdit = false;
+  let shaderOwnerId = null;
+  
+  // Use a separate reactive block that only updates when absolutely necessary
+  $: {
+    // Only update auth state if it actually changed to prevent unnecessary re-renders
+    const newAuth = $isAuthenticated;
+    const newUserId = $authUserId;
+    const newShaderOwnerId = shader?.user_id || shader?.UserID;
+    
+    if (authenticated !== newAuth || currentUserId !== newUserId || shaderOwnerId !== newShaderOwnerId) {
+      authenticated = newAuth;
+      currentUserId = newUserId;
+      shaderOwnerId = newShaderOwnerId;
+      canEdit = authenticated && (currentUserId === shaderOwnerId || !shader?.id);
+    }
+  }
+
+  // Track workspace initialization to prevent re-initialization on auth changes
+  let workspaceInitialized = false;
 
   let isEditingName = false;
   let editingName = '';
@@ -197,11 +215,14 @@
   }
 
   onMount(() => { 
-    initWorkspace().then(() => {
-      // Start auto-save once workspace is initialized
-      startAutoSave();
-      editorActions.addConsoleMessage('Auto-save enabled', 'info');
-    });
+    if (!workspaceInitialized) {
+      initWorkspace().then(() => {
+        workspaceInitialized = true;
+        // Start auto-save once workspace is initialized
+        startAutoSave();
+        editorActions.addConsoleMessage('Auto-save enabled', 'info');
+      });
+    }
     
     // Cleanup on component destroy
     return () => {
