@@ -1,25 +1,26 @@
 <script>
-  import { applyFilters, clearSearch } from '../stores/shaders.js';
-  export let filters = { name: '' };
-  let q = filters.name;
+  import { searchQuery } from '../stores/selectors.js';
+  import { filterActions } from '../stores/actions.js';
   
-  // Only update q from filters if it's different and user isn't actively typing
-  $: if (filters.name !== q && document.activeElement?.tagName !== 'INPUT') {
-    q = filters.name;
-  }
+  $: q = $searchQuery;
   
   function submit(e){ 
     e.preventDefault(); 
-    applyFilters({ name: q }); 
+    filterActions.setSearchQuery(q); 
   }
   
   function onClear(){ 
-    q = '';
-    clearSearch(); 
+    filterActions.setSearchQuery('');
   }
   
   function onInput(e) {
+    // Update local value for immediate UI feedback
     q = e.target.value;
+    // Debounce the actual filter update
+    clearTimeout(onInput.timeout);
+    onInput.timeout = setTimeout(() => {
+      filterActions.setSearchQuery(e.target.value);
+    }, 300);
   }
 </script>
 
@@ -67,6 +68,43 @@
   .search-bar input:focus {
     outline: none;
     border-color: #667eea;
+  }
+
+  .search-bar button[type="submit"] {
+    background-color: #3182ce;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .search-bar button[type="submit"]:hover {
+    background-color: #2c5aa0;
+  }
+
+  .search-bar button[type="submit"]:active {
+    background-color: #2a4a8b;
+    transform: translateY(1px);
+  }
+
+  .search-bar button[type="button"] {
+    background-color: #e53e3e;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 5px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    line-height: 1;
+  }
+
+  .search-bar button[type="button"]:hover {
+    background-color: #c53030;
   }
 
   .search-results-info {

@@ -1,12 +1,16 @@
 <script>
-  import { editorState, addConsoleMessage } from '../../stores/editor.js';
-  let state;
-  const unsub = editorState.subscribe(s => state = s);
-  import { onDestroy, afterUpdate } from 'svelte';
+  import { editorConsole } from '../../stores/selectors.js';
+  import { editorActions } from '../../stores/actions.js';
+  import { afterUpdate } from 'svelte';
+  
   let container;
-  afterUpdate(()=>{ if(container) container.scrollTop = container.scrollHeight; });
-  function clear(){ editorState.update(s => ({ ...s, consoleMessages: [] })); }
-  onDestroy(unsub);
+  afterUpdate(() => { 
+    if (container) container.scrollTop = container.scrollHeight; 
+  });
+  
+  function clear() { 
+    editorActions.clearConsole();
+  }
 </script>
 
 <div class="console-panel">
@@ -15,10 +19,10 @@
     <button on:click={clear} aria-label="Clear console" class="clear-btn">✕</button>
   </div>
   <div class="console-content" bind:this={container}>
-    {#each state.consoleMessages as m (m.time)}
-      <div class="console-message {m.type}">[{m.time.toLocaleTimeString()}] {m.text}</div>
+    {#each $editorConsole as m (m.id)}
+      <div class="console-message {m.type}">[{m.timestamp}] {m.message}</div>
     {/each}
-    {#if !state.consoleMessages.length}
+    {#if !$editorConsole.length}
       <div class="empty">No messages</div>
     {/if}
   </div>

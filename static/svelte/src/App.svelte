@@ -2,68 +2,153 @@
   import { onMount } from 'svelte';
   import BrowsePage from './components/BrowsePage.svelte';
   import EditorPage from './components/EditorPage.svelte';
-  import { shaders, loadInitialShaders } from './stores/shaders.js';
-  import { setShader, replaceAllScripts } from './stores/editor.js';
+  import Navbar from './components/Navbar.svelte';
+  import AuthBar from './components/AuthBar.svelte';
+  import { authActions, navigationActions } from './stores/actions.js';
+  import { currentPage, authLoading } from './stores/selectors.js';
 
-  let page = 'browse';
+  let appLoading = true;
 
-  function derivePage(path){
-    if(path === '/' || path === '') return 'browse';
-    if(path === '/my') return 'browse';
-    if(path === '/new') return 'editor';
-    if(/^\/[0-9]+$/.test(path)) return 'editor';
-    return 'browse';
-  }
+  // Use centralized selectors
+  $: page = $currentPage;
+  $: authIsLoading = $authLoading;
 
-  function setPageFromLocation(){
-    const p = derivePage(window.location.pathname);
-    if(page !== p){ page = p; }
-  }
-
-  function initializeEditorData() {
-    // Initialize editor with shader data from the backend if available
-    if (window.shaderData && page === 'editor') {
-      console.log('App.svelte: Initializing editor with shader data:', window.shaderData);
+  onMount(async () => {
+    console.log('App.svelte: Starting centralized SPA initialization...');
+    
+    try {
+      // Initialize authentication through centralized actions
+      await authActions.initAuth();
+      console.log('App.svelte: Auth initialized via centralized store');
       
-      // Set the shader data in the editor state
-      setShader(window.shaderData);
+      // Initialize navigation through centralized actions
+      navigationActions.initNavigation();
+      console.log('App.svelte: Navigation initialized via centralized store');
       
-      // Set the scripts array from shader_scripts
-      const scripts = window.shaderData.shader_scripts || [];
-      replaceAllScripts(scripts);
-      
-      console.log('App.svelte: Editor initialized with', scripts.length, 'scripts');
+    } catch (error) {
+      console.error('App.svelte: Initialization failed:', error);
+    } finally {
+      appLoading = false;
     }
-  }
-
-  onMount(() => {
-    console.log('App.svelte onMount - window.__AUTH__:', window.__AUTH__);
-    console.log('App.svelte onMount - window.__PAGE__:', window.__PAGE__);
-    console.log('App.svelte onMount - window.shaderData:', window.shaderData);
-    
-    if (window.__PAGE__) page = window.__PAGE__;
-    else setPageFromLocation();
-    
-    // Initialize editor data first, then load shaders for browse page
-    initializeEditorData();
-    
-    if (page === 'browse') loadInitialShaders();
-    window.addEventListener('popstate', setPageFromLocation);
-    // Removed click interception for now to allow full page loads (ensures shaderData + auth state)
   });
-
-  $: if (page === 'browse') { /* ensure shaders loaded when returning */ loadInitialShaders(); }
-  $: if (page === 'editor') { /* ensure editor data loaded when switching to editor */ initializeEditorData(); }
 </script>
 
-{#if page === 'browse'}
-  <BrowsePage />
-{:else if page === 'editor'}
-  <EditorPage />
+{#if appLoading || authIsLoading}
+  <div class="loading-screen">
+    <div class="loading-content">
+      <h2>WebGPU Shader Editor</h2>
+      <div class="loading-spinner"></div>
+      <p>Initializing application...</p>
+    </div>
+  </div>
 {:else}
-  <div class="placeholder">Page {page} not yet migrated to Svelte.</div>
+  <div class="app-layout">
+    <Navbar>
+      <div slot="auth">
+        <AuthBar />
+      </div>
+    </Navbar>
+    
+    <main class="main-content">
+      {#if page === 'browse'}
+        <BrowsePage />
+      {:else if page === 'editor'}
+        <EditorPage />
+      {:else}
+        <div class="placeholder">Page {page} not yet migrated to Svelte.</div>
+      {/if}
+    </main>
+    
+    <footer class="footer">
+      <div class="footer-content">
+        <p>&copy; 2025 ShaderStack.</p>
+      </div>
+    </footer>
+  </div>
 {/if}
 
 <style>
-  .placeholder { padding: 2rem; font-style: italic; opacity: .7; }
+  .app-layout {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .main-content {
+    flex: 1;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    padding: 1rem 0;
+    margin-top: auto;
+  }
+
+  .footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+
+  .loading-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+  }
+
+  .loading-content {
+    text-align: center;
+    max-width: 400px;
+    padding: 2rem;
+  }
+
+  .loading-content h2 {
+    margin-bottom: 2rem;
+    font-size: 2rem;
+    font-weight: 300;
+  }
+
+  .loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top: 3px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 1rem auto;
+  }
+
+  .loading-content p {
+    margin-top: 1rem;
+    opacity: 0.8;
+    font-size: 1rem;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .placeholder { 
+    padding: 2rem; 
+    font-style: italic; 
+    opacity: .7; 
+  }
+
+  @media (max-width: 768px) {
+    .main-content {
+      padding: 1rem;
+    }
+  }
 </style>

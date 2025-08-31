@@ -36,6 +36,39 @@ export async function apiDelete(path) {
   return res.json();
 }
 
+// Authentication API Functions
+
+/**
+ * Get current authentication status
+ */
+export async function getAuthStatus() {
+  try {
+    return await apiGet('/api/auth/status');
+  } catch (error) {
+    // If auth status fails, assume not authenticated
+    return {
+      isAuthenticated: false,
+      user: null,
+      username: null,
+      user_id: null
+    };
+  }
+}
+
+/**
+ * Login with credentials
+ */
+export async function login(credentials) {
+  return apiPost('/api/auth/login', credentials);
+}
+
+/**
+ * Logout current user
+ */
+export async function logout() {
+  return apiPost('/api/auth/logout', {});
+}
+
 // Shader API Functions - using actual backend routes
 
 /**
@@ -61,6 +94,40 @@ export async function saveShaderProject(shaderId, shaderData) {
  */
 export async function deleteShaderProject(shaderId) {
   return apiDelete(`/api/shaders/${shaderId}`);
+}
+
+// Shader Listing API Functions
+
+/**
+ * Get all shaders or filter by user
+ */
+export async function getShaders(filters = {}) {
+  let path = '/api/shaders';
+  
+  // Add query parameters if filters provided
+  const params = new URLSearchParams();
+  if (filters.user_id) {
+    params.append('user_id', filters.user_id);
+  }
+  if (filters.search) {
+    params.append('search', filters.search);
+  }
+  if (filters.tags && filters.tags.length > 0) {
+    params.append('tags', filters.tags.join(','));
+  }
+  
+  if (params.toString()) {
+    path += '?' + params.toString();
+  }
+  
+  return apiGet(path);
+}
+
+/**
+ * Get all available tags
+ */
+export async function getTags() {
+  return apiGet('/api/tags');
 }
 
 // Helper functions for editor workflow

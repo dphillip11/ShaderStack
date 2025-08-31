@@ -1,7 +1,21 @@
 <script>
   import { onMount } from 'svelte';
-  import { editorState, activeScript, addConsoleMessage, setActiveScript, updateScriptCode, updateShaderName, setShaderTags } from '../stores/editor.js';
-  import { auth } from '../stores/auth.js';
+  import { 
+    currentShader, 
+    editorActiveScript, 
+    editorScripts,
+    editorConsole,
+    isAuthenticated, 
+    authUserId,
+    editorSaving,
+    editorRunning,
+    editorInitializing 
+  } from '../stores/selectors.js';
+  import { 
+    editorActions, 
+    authActions,
+    uiActions 
+  } from '../stores/actions.js';
   import { initWorkspace, runAll, saveShader, compileActive, startRealTime, stopRealTime, isRealTimeRunning, startAutoSave, stopAutoSave } from '../adapters/workspaceAdapter.js';
   import ScriptTabs from './editor/ScriptTabs.svelte';
   import CodeEditor from './editor/CodeEditor.svelte';
@@ -10,18 +24,18 @@
   import DeleteConfirmDialog from './DeleteConfirmDialog.svelte';
   import { derived } from 'svelte/store';
 
-  const state = editorState;
-  const script = activeScript;
-  const saving = derived(state, $s => $s.saving);
-  const running = derived(state, $s => $s.running);
-  const initializing = derived(state, $s => $s.initializing);
-  const realTimeRunning = isRealTimeRunning;
-
-  // Check if user is authenticated and owns the current shader
-  $: isAuthenticated = $auth.isAuthenticated;
-  $: currentUserId = $auth.user_id; // Assuming username is unique identifier
-  $: shaderOwnerId = $state.shader?.user_id || $state.shader?.user_id;
-  $: canEdit = isAuthenticated && (currentUserId === shaderOwnerId || !$state.shader?.id); // Can edit if owner or new shader
+  // Use centralized selectors
+  $: shader = $currentShader;
+  $: script = $editorActiveScript;
+  $: saving = $editorSaving;
+  $: running = $editorRunning;
+  $: initializing = $editorInitializing;
+  $: authenticated = $isAuthenticated;
+  $: currentUserId = $authUserId;
+  
+  // Check permissions
+  $: shaderOwnerId = shader?.user_id || shader?.UserID;
+  $: canEdit = authenticated && (currentUserId === shaderOwnerId || !shader?.id);
 
   let isEditingName = false;
   let editingName = '';
@@ -31,14 +45,13 @@
 
   function startEditingName() {
     isEditingName = true;
-    editingName = $state.shader?.name || 'New Shader';
+    editingName = shader?.name || 'New Shader';
   }
 
   function saveShaderName() {
-    if (editingName.trim() && editingName !== $state.shader?.name) {
-      // Update the shader name in the store using the proper function
-      updateShaderName(editingName.trim());
-      addConsoleMessage(`Shader name updated to "${editingName.trim()}"`, 'info');
+    if (editingName.trim() && editingName !== shader?.name) {
+      editorActions.updateShaderName(editingName.trim());
+      editorActions.addConsoleMessage(`Shader name updated to "${editingName.trim()}"`, 'info');
     }
     isEditingName = false;
   }
@@ -72,14 +85,14 @@
     const tagName = newTagInput.trim().toLowerCase();
     if (!tagName) return;
 
-    const currentTags = $state.shader?.tags || [];
+    const currentTags = shader?.tags || [];
     const tagExists = currentTags.some(tag => (tag.name || tag.Name || '').toLowerCase() === tagName);
     
     if (!tagExists) {
       const newTag = { name: tagName };
       const updatedTags = [...currentTags, newTag];
-      setShaderTags(updatedTags);
-      addConsoleMessage(`Added tag "${tagName}"`, 'info');
+      editorActions.setShaderTags(updatedTags);
+      editorActions.addConsoleMessage(`Added tag "${tagName}"`, 'info');
     }
     
     newTagInput = '';
@@ -88,14 +101,14 @@
   function removeTag(tagToRemove) {
     if (!canEdit) return;
     
-    const currentTags = $state.shader?.tags || [];
+    const currentTags = shader?.tags || [];
     const tagName = tagToRemove.name || tagToRemove.Name || '';
     const updatedTags = currentTags.filter(tag => 
       (tag.name || tag.Name || '').toLowerCase() !== tagName.toLowerCase()
     );
     
-    setShaderTags(updatedTags);
-    addConsoleMessage(`Removed tag "${tagName}"`, 'info');
+    editorActions.setShaderTags(updatedTags);
+    editorActions.addConsoleMessage(`Removed tag "${tagName}"`, 'info');
   }
 
   function handleTagInputKeydown(e) {
@@ -110,12 +123,20 @@
     }
   }
 
-  function onRun(){ runAll().catch(e=>addConsoleMessage(e.message,'error')); }
-  function onSave(){ saveShader().catch(e=>addConsoleMessage(e.message,'error')); }
-  function onCompile(){ compileActive().catch(e=>addConsoleMessage(e.message,'error')); }
+  function onRun(){ 
+    runAll().catch(e => editorActions.addConsoleMessage(e.message,'error')); 
+  }
+  
+  function onSave(){ 
+    saveShader().catch(e => editorActions.addConsoleMessage(e.message,'error')); 
+  }
+  
+  function onCompile(){ 
+    compileActive().catch(e => editorActions.addConsoleMessage(e.message,'error')); 
+  }
   
   function onToggleRealTime() {
-    if ($realTimeRunning) {
+    if ($isRealTimeRunning) {
       stopRealTime();
     } else {
       startRealTime();
@@ -124,7 +145,7 @@
 
   // Delete functionality
   function showDeleteDialog() {
-    if (!canEdit || !$state.shader?.id) return;
+    if (!canEdit || !shader?.id) return;
     showDeleteConfirm = true;
   }
 
@@ -138,7 +159,7 @@
       await deleteShader();
       hideDeleteDialog();
     } catch (error) {
-      addConsoleMessage(`Delete failed: ${error.message}`, 'error');
+      editorActions.addConsoleMessage(`Delete failed: ${error.message}`, 'error');
       hideDeleteDialog();
     }
   }
@@ -179,7 +200,7 @@
     initWorkspace().then(() => {
       // Start auto-save once workspace is initialized
       startAutoSave();
-      addConsoleMessage('Auto-save enabled', 'info');
+      editorActions.addConsoleMessage('Auto-save enabled', 'info');
     });
     
     // Cleanup on component destroy
@@ -192,7 +213,7 @@
   });
 </script>
 
-<div class="svelte-editor" data-initializing={$initializing}>
+<div class="svelte-editor" data-initializing={initializing}>
   <header class="editor-bar">
     <div class="title-and-meta">
       <div class="title-group">
@@ -211,18 +232,18 @@
               class="editable-title" 
               class:read-only={!canEdit}
               title={canEdit ? "Click to edit name" : "Read-only (not your shader)"}>
-            {$state.shader?.name || 'New Shader'}
+            {shader?.name || 'New Shader'}
             {#if canEdit}<i class="fas fa-edit edit-icon"></i>{/if}
           </h1>
         {/if}
-        {#if !canEdit && $state.shader?.id}<span class="read-only-badge">Read Only</span>{/if}
+        {#if !canEdit && shader?.id}<span class="read-only-badge">Read Only</span>{/if}
       </div>
 
       <!-- Tags Section -->
       <div class="tags-section">
         <div class="tags-container">
-          {#if $state.shader?.tags && $state.shader.tags.length > 0}
-            {#each $state.shader.tags as tag}
+          {#if shader?.tags && shader.tags.length > 0}
+            {#each shader.tags as tag}
               <span class="tag-pill">
                 {tag.name || tag.Name}
                 {#if canEdit}
@@ -265,17 +286,17 @@
     </div>
 
     <div class="actions">
-      {#if isAuthenticated && canEdit}
-        <button on:click={onSave} disabled={$saving || $initializing}>{$saving ? 'Saving…' : 'Save'}</button>
+      {#if authenticated && canEdit}
+        <button on:click={onSave} disabled={saving || initializing}>{saving ? 'Saving…' : 'Save'}</button>
       {/if}
-      <button on:click={onRun} disabled={$running || $initializing}>{$running ? 'Running…' : 'Run'}</button>
-      <button on:click={onCompile} disabled={$initializing}>Compile</button>
-      <button on:click={onToggleRealTime} disabled={$initializing}>{$realTimeRunning ? 'Pause' : 'Play'}</button>
-      {#if isAuthenticated && canEdit && $state.shader?.id}
+      <button on:click={onRun} disabled={running || initializing}>{running ? 'Running…' : 'Run'}</button>
+      <button on:click={onCompile} disabled={initializing}>Compile</button>
+      <button on:click={onToggleRealTime} disabled={initializing}>{$isRealTimeRunning ? 'Pause' : 'Play'}</button>
+      {#if authenticated && canEdit && shader?.id}
         <button 
           class="delete-btn" 
           on:click={showDeleteDialog} 
-          disabled={$saving || $initializing}
+          disabled={saving || initializing}
           title="Delete shader"
         >
           <i class="fas fa-trash"></i> Delete
@@ -287,7 +308,7 @@
   <div class="layout" bind:this={layoutRef}>
     <div class="left-pane" style="width: {leftPaneWidth}%;">
       <ScriptTabs />
-      <CodeEditor script={$script} on:updateCode={(e)=>updateScriptCode(e.detail.id,e.detail.code)} />
+      <CodeEditor script={script} on:updateCode={(e)=>editorActions.updateScriptCode(e.detail.id,e.detail.code)} />
     </div>
     
     <div class="resize-handle" 
@@ -306,8 +327,8 @@
 <!-- Delete Confirmation Dialog -->
 <DeleteConfirmDialog 
   show={showDeleteConfirm}
-  shaderName={$state.shader?.name || ''}
-  isDeleting={$saving}
+  shaderName={shader?.name || ''}
+  isDeleting={saving}
   on:confirm={confirmDelete}
   on:cancel={hideDeleteDialog}
 />

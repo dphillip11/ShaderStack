@@ -3,86 +3,85 @@
   import TagFilters from './TagFilters.svelte';
   import ShaderGrid from './ShaderGrid.svelte';
   import DeleteConfirmDialog from './DeleteConfirmDialog.svelte';
-  import { filteredShaders, availableTags, shaderFilters, refreshShaders } from '../stores/shaders.js';
-  import { deleteShaderProject } from '../stores/api.js';
+  import { 
+    displayShaders, 
+    availableTags, 
+    shaderFilters, 
+    shadersLoading,
+    pageTitle,
+    deleteConfirmModal
+  } from '../stores/selectors.js';
+  import { 
+    shaderActions, 
+    filterActions, 
+    uiActions 
+  } from '../stores/actions.js';
   import { onMount } from 'svelte';
 
-  let list = [];
-  let tags = [];
-  let filters;
-  let pageTitle = 'Browse Shaders';
-  let showDeleteDialog = false;
-  let shaderToDelete = null;
-  let isDeleting = false;
-
-  // Check if we're on the "My Shaders" page
-  if (typeof window !== 'undefined' && window.myShaders) {
-    pageTitle = window.myShaders.title || 'My Shaders';
-  }
-
-  const unsub = [
-    filteredShaders.subscribe(v => list = v),
-    availableTags.subscribe(v => tags = v),
-    shaderFilters.subscribe(v => filters = v)
-  ];
+  // Use centralized selectors - no local state needed
+  $: shaders = $displayShaders;
+  $: tags = $availableTags;
+  $: filters = $shaderFilters;
+  $: loading = $shadersLoading;
+  $: title = $pageTitle;
+  $: deleteDialog = $deleteConfirmModal;
 
   function handleShaderDelete(event) {
-    const { shader, id, name } = event.detail;
-    shaderToDelete = { shader, id, name };
-    showDeleteDialog = true;
+    const { shader } = event.detail;
+    uiActions.showDeleteConfirm(shader);
   }
 
   function hideDeleteDialog() {
-    if (isDeleting) return;
-    showDeleteDialog = false;
-    shaderToDelete = null;
+    if (deleteDialog.isDeleting) return;
+    uiActions.hideDeleteConfirm();
   }
 
   async function confirmDelete() {
-    if (!shaderToDelete || isDeleting) return;
-    
-    try {
-      isDeleting = true;
-      await deleteShaderProject(shaderToDelete.id);
-      
-      // Refresh the shader list to remove the deleted shader
-      await refreshShaders();
-      
-      // Hide dialog and reset state
-      hideDeleteDialog();
-      
-      console.log(`Shader "${shaderToDelete.name}" deleted successfully`);
-    } catch (error) {
-      console.error('Delete failed:', error);
-      isDeleting = false; // Re-enable UI on error
-    }
+    if (!deleteDialog.shader || deleteDialog.isDeleting) return;
+    await shaderActions.deleteShader(deleteDialog.shader.id);
   }
 
-  onMount(() => () => unsub.forEach(u => u()));
+  // No need for onMount - navigation actions handle data loading
 </script>
 
-<section class="browse-svelte" aria-label="{pageTitle}">
+<div class="browse-page">
   <div class="page-header">
-    <h1>{pageTitle}</h1>
-    {#if pageTitle === 'My Shaders'}
-      <p class="page-description">Your personal shader collection</p>
+    <h1>{title}</h1>
+    <div class="page-stats">
+      {#if loading}
+        <span class="loading-text">Loading...</span>
+      {:else}
+        <span class="shader-count">{shaders.length} shader{shaders.length !== 1 ? 's' : ''}</span>
+      {/if}
+    </div>
+  </div>
+
+  <div class="controls-section">
+    <SearchBar />
+    <TagFilters />
+  </div>
+
+  <div class="content-section">
+    {#if loading}
+      <div class="loading-grid">
+        {#each Array(6) as _, i}
+          <div class="shader-card-skeleton" />
+        {/each}
+      </div>
     {:else}
-      <p class="page-description">Discover and explore community shaders</p>
+      <ShaderGrid on:delete={handleShaderDelete} />
     {/if}
   </div>
-  <SearchBar {filters} />
-  <TagFilters {tags} />
-  <ShaderGrid {list} on:delete={handleShaderDelete} />
-</section>
 
-<!-- Delete Confirmation Dialog -->
-<DeleteConfirmDialog 
-  show={showDeleteDialog}
-  shaderName={shaderToDelete?.name || ''}
-  isDeleting={isDeleting}
-  on:confirm={confirmDelete}
-  on:cancel={hideDeleteDialog}
-/>
+  {#if deleteDialog.show}
+    <DeleteConfirmDialog
+      shader={deleteDialog.shader}
+      isDeleting={deleteDialog.isDeleting}
+      on:confirm={confirmDelete}
+      on:cancel={hideDeleteDialog}
+    />
+  {/if}
+</div>
 
 <style>
   .browse-svelte { display: flex; flex-direction: column; gap: 1rem; }

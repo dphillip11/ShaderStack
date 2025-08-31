@@ -79,7 +79,11 @@ func Login(w http.ResponseWriter, r *http.Request) {
 func Logout(w http.ResponseWriter, r *http.Request) {
     cookie, err := r.Cookie("session_token")
     if err != nil {
-        http.Redirect(w, r, "/", http.StatusSeeOther)
+        // No session cookie found, but still return success for idempotency
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "message": "Logout successful",
+        })
         return
     }
 
@@ -96,8 +100,11 @@ func Logout(w http.ResponseWriter, r *http.Request) {
         MaxAge:   -1,
     })
 
-    // Redirect to homepage after logout
-    http.Redirect(w, r, "/", http.StatusSeeOther)
+    // Return JSON response instead of redirecting
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "message": "Logout successful",
+    })
 }
 
 // AuthMiddleware checks if user is authenticated
@@ -142,10 +149,75 @@ func generateToken() string {
     return hex.EncodeToString(bytes)
 }
 
+// GetAuthStatus returns the current authentication status
+func GetAuthStatus(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    
+    cookie, err := r.Cookie("session_token")
+    if err != nil {
+        // No session cookie - user is not authenticated
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "isAuthenticated": false,
+            "username":        "",
+            "user_id":         nil,
+        })
+        return
+    }
+
+    sessionsMu.Lock()
+    session, exists := sessions[cookie.Value]
+    sessionsMu.Unlock()
+
+    if !exists {
+        // Invalid session - user is not authenticated
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "isAuthenticated": false,
+            "username":        "",
+            "user_id":         nil,
+        })
+        return
+    }
+
+    // Get user details
+    user := data.GetRepository().GetUserByID(session.UserID)
+    if user == nil {
+        // User not found - invalid session
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "isAuthenticated": false,
+            "username":        "",
+            "user_id":         nil,
+        })
+        return
+    }
+
+    // User is authenticated
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "isAuthenticated": true,
+        "username":        user.Username,
+        "user_id":         user.ID,
+    })
+}
+
 // Shader API handlers
 func GetShaders(w http.ResponseWriter, r *http.Request) {
     repo := data.GetRepository()
-    params := models.SearchParams{} // Get all shaders
+    params := models.SearchParams{}
+    
+    // Parse query parameters
+    if userIDStr := r.URL.Query().Get("user_id"); userIDStr != "" {
+        if userID, err := strconv.Atoi(userIDStr); err == nil {
+            params.UserID = userID
+        }
+    }
+    
+    if name := r.URL.Query().Get("name"); name != "" {
+        params.Name = name
+    }
+    
+    if tags := r.URL.Query()["tags"]; len(tags) > 0 {
+        params.Tags = tags
+    }
+    
     shaders := repo.SearchShaders(params)
     
     w.Header().Set("Content-Type", "application/json")

@@ -1,32 +1,25 @@
 <script>
-  import { auth, initAuth, logout } from '../stores/auth.js';
+  import { isAuthenticated, authUsername, authLoading } from '../stores/selectors.js';
+  import { authActions, uiActions } from '../stores/actions.js';
   import LoginModal from './LoginModal.svelte';
-  import { onMount } from 'svelte';
-  let state = { isAuthenticated:false, username:'' };
+  
+  $: authenticated = $isAuthenticated;
+  $: username = $authUsername;
+  $: loading = $authLoading;
+  
   let modal;
-  let unsubscribe;
-  onMount(()=>{ 
-    console.log('AuthBar onMount - calling initAuth');
-    initAuth(); 
-    unsubscribe = auth.subscribe(v=> {
-      console.log('AuthBar auth state changed:', v);
-      state=v;
-    }); 
-    return ()=>unsubscribe&&unsubscribe(); 
-  });
+  
   function openLogin(){ 
-    console.log('AuthBar openLogin called, modal:', modal);
-    if (modal && typeof modal.open === 'function') {
-      modal.open(); 
-    } else {
-      console.error('Modal reference is null or open() not available:', modal);
-    }
+    uiActions.showLoginModal();
   }
-  function doLogout(){ logout(); }
+  
+  function doLogout(){ 
+    authActions.logout();
+  }
 </script>
 <div class="auth-bar">
-  {#if state.isAuthenticated}
-    <span class="user"><i class="fas fa-user"></i> {state.username}</span>
+  {#if authenticated}
+    <span class="user"><i class="fas fa-user"></i> {username}</span>
     <button class="btn-small" on:click={doLogout} aria-label="Logout"><i class="fas fa-sign-out-alt"></i></button>
   {:else}
     <button class="btn-small primary" on:click={openLogin} aria-label="Login"><i class="fas fa-sign-in-alt"></i> Login</button>

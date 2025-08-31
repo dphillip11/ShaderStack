@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
-  import { editorState, updateScriptCode, addConsoleMessage } from '../../stores/editor.js';
+  import { editorConsole } from '../../stores/selectors.js';
+  import { editorActions } from '../../stores/actions.js';
   export let script = null; // { id, code }
   const dispatch = createEventDispatcher();
   
@@ -76,10 +77,10 @@
     updateInjectedCodePreview();
   }
 
-  // Listen for compilation errors from the store
-  $: if ($editorState.consoleMessages) {
-    const latestErrors = $editorState.consoleMessages
-      .filter(msg => msg.type === 'error' && msg.text.includes(`Script ${script?.id}`))
+  // Listen for compilation errors from the console
+  $: if ($editorConsole) {
+    const latestErrors = $editorConsole
+      .filter(msg => msg.type === 'error' && msg.message.includes(`Script ${script?.id}`))
       .slice(-5); // Keep only latest 5 errors
     
     errors = extractLineNumbers(latestErrors);
@@ -88,11 +89,11 @@
   function extractLineNumbers(errorMessages) {
     const lineErrors = [];
     errorMessages.forEach(msg => {
-      const lineMatch = msg.text.match(/Line (\d+):/);
+      const lineMatch = msg.message.match(/Line (\d+):/);
       if (lineMatch) {
         lineErrors.push({
           line: parseInt(lineMatch[1]),
-          message: msg.text
+          message: msg.message
         });
       }
     });
@@ -119,7 +120,7 @@
     const code = localCode;
     clearTimeout(timeout);
     timeout = setTimeout(() => {
-      updateScriptCode(id, code);
+      editorActions.updateScriptCode(id, code);
       dispatch('updateCode', { id, code });
       // Update injected code preview after a short delay
       setTimeout(updateInjectedCodePreview, 100);
@@ -150,7 +151,7 @@
         await workspace.compileActiveScript();
       }
     } catch (error) {
-      addConsoleMessage(`Compilation failed: ${error.message}`, 'error');
+      editorActions.addConsoleMessage(`Compilation failed: ${error.message}`, 'error');
     }
   }
 
@@ -210,7 +211,7 @@
     </div>
     
     <div class="injected-section">
-      <div class="section-header injected-header" on:click={toggleInjectedCode}>
+      <div class="section-header injected-header" on:click={toggleInjectedCode} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && toggleInjectedCode()}>
         <h4>
           <span class="toggle-icon" class:expanded={showInjectedCode}>▶</span>
           Injected Shader Code (Debug)

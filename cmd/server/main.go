@@ -22,10 +22,11 @@ func main() {
 
     // Removed InitTemplates (SSR templates deprecated)
 
-    // Authentication routes
-    r.HandleFunc("/api/login", handlers.Login).Methods("POST")
-    r.HandleFunc("/api/logout", handlers.Logout).Methods("POST")
-    fmt.Println("Auth routes added...")
+    // API routes for authentication
+    r.HandleFunc("/api/auth/status", handlers.GetAuthStatus).Methods("GET")
+    r.HandleFunc("/api/auth/login", handlers.Login).Methods("POST")
+    r.HandleFunc("/api/auth/logout", handlers.Logout).Methods("POST")
+    fmt.Println("Auth API routes added...")
 
     // API routes for shaders - Fixed to match frontend expectations
     r.HandleFunc("/api/shaders", handlers.GetShaders).Methods("GET")
@@ -45,11 +46,9 @@ func main() {
     }).Methods("GET")
 
     // Web routes - specific routes first, then general ones
-    r.HandleFunc("/", handlers.RenderBrowse).Methods("GET")
-    r.HandleFunc("/my", handlers.AuthMiddleware(handlers.RenderMy)).Methods("GET")
-    r.HandleFunc("/new", handlers.RenderEditor).Methods("GET")
-    r.HandleFunc("/{id:[0-9]+}", handlers.RenderEditor).Methods("GET")
-    fmt.Println("Web routes added...")
+    r.HandleFunc("/", handlers.RenderSPA).Methods("GET")
+    r.HandleFunc("/{id:[0-9]+}", handlers.RenderSPA).Methods("GET")
+    r.HandleFunc("/my", handlers.RenderSPA).Methods("GET")
 
     // Static file serving with caching
     r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", cacheFileServer("static")))

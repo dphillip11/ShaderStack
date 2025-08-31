@@ -1,59 +1,58 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { login } from '../stores/auth.js';
+  import { loginModal, authLoading, authError } from '../stores/selectors.js';
+  import { authActions, uiActions } from '../stores/actions.js';
+  
   const dispatch = createEventDispatcher();
   let username = '';
   let password = '';
-  let loading = false;
-  let error = '';
-  let show = false;
+  
+  $: show = $loginModal.show;
+  $: loading = $authLoading;
+  $: error = $authError;
+  
   export function open(){ 
-    console.log('LoginModal open() called, current show:', show);
-    show = true; 
-    console.log('LoginModal show set to:', show);
-    error=''; 
-    username=''; 
-    password=''; 
-    // Force a DOM update check
-    setTimeout(() => {
-      const modalEl = document.querySelector('.modal');
-      console.log('Modal DOM element found:', !!modalEl, modalEl);
-      if (modalEl) {
-        console.log('Modal computed styles:', window.getComputedStyle(modalEl).display, window.getComputedStyle(modalEl).zIndex);
-      }
-    }, 10);
+    uiActions.showLoginModal();
+    error = '';
+    username = '';
+    password = '';
   }
+  
   function close(){ 
-    if(loading)return; 
-    console.log('LoginModal close() called');
-    show = false; 
+    if(loading) return; 
+    uiActions.hideLoginModal();
     dispatch('close'); 
   }
+  
   async function submit(){
-    if(username.length<3||password.length<3) return;
-    loading=true; error='';
+    if(username.length < 3 || password.length < 3) return;
+    
     try { 
-      await login(username.trim(), password); 
+      await authActions.login({
+        username: username.trim(),
+        password: password
+      });
       
-      // Close modal immediately and wait for DOM update
-      show = false;
-      dispatch('close');
+      // Modal will be closed automatically by the auth action
       dispatch('loggedIn');
-      
-      // Wait a brief moment for the modal to actually disappear from DOM
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Then refresh the page to update authentication state throughout the app
-      window.location.reload();
+    } catch(e) {
+      // Error handling is done in the centralized auth action
+      console.error('Login failed:', e);
     }
-    catch(e){ 
-      error = e.message || 'Login failed'; 
-      loading=false;
-    }
-    // Don't set loading=false on success since we're reloading
   }
-  function onKey(e){ if(e.key==='Escape') close(); if(e.key==='Enter') submit(); }
+  
+  function onKey(e){ 
+    if(e.key === 'Escape') close(); 
+    if(e.key === 'Enter') submit(); 
+  }
+  
+  function demoLogin() {
+    username = 'demo';
+    password = 'demo123';
+    submit();
+  }
 </script>
+
 {#if show}
 <div class="modal svelte-modal-overlay" on:keydown|self={onKey} role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="modal-content">
@@ -78,12 +77,13 @@
           <i class="fas fa-sign-in-alt"></i> Login
         {/if}
       </button>
-      <button type="button" class="btn-secondary" on:click={() => { username='demo'; password='demo123'; submit(); }} disabled={loading}>Demo</button>
+      <button type="button" class="btn-secondary" on:click={demoLogin} disabled={loading}>Demo</button>
     </div>
     <p class="login-help"><small>Demo: demo / demo123</small></p>
   </div>
 </div>
 {/if}
+
 <style>
   :global(.svelte-modal-overlay) { 
     position: fixed !important; 

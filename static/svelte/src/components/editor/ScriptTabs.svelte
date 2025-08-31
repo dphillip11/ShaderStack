@@ -1,18 +1,20 @@
 <script>
-  import { editorState, setActiveScript, updateScriptBuffer, deleteScript } from '../../stores/editor.js';
-  import { addScript, updatePreview } from '../../adapters/workspaceAdapter.js';
+  import { 
+    editorScripts, 
+    editorActiveScript, 
+    editorActiveScriptId 
+  } from '../../stores/selectors.js';
+  import { editorActions } from '../../stores/actions.js';
+  import { addScript, updatePreview, deleteScript } from '../../adapters/workspaceAdapter.js';
   import BufferControls from './BufferControls.svelte';
   
-  let state;
-  const unsubscribe = editorState.subscribe(s => state = s);
-  
   async function select(id) { 
-    setActiveScript(id);
+    editorActions.setActiveScript(id);
     // Compile and execute the script when switching tabs, then update preview
     try {
       const workspace = window.__workspaceRef;
       if (workspace && workspace.scriptEngine) {
-        const script = state?.scripts?.find(s => s.id === id);
+        const script = $editorScripts?.find(s => s.id === id);
         
         if (script) {
           // Check if script is already compiled
@@ -35,17 +37,17 @@
   
   function add(){ addScript(); }
   
-  $: scripts = state?.scripts || [];
-  $: active = state?.activeScriptId;
-  $: activeScript = scripts.find(sc => sc.id === active);
+  $: scripts = $editorScripts || [];
+  $: active = $editorActiveScriptId;
+  $: activeScript = $editorActiveScript;
   
   function handleBufferChange(event) {
     if (activeScript) {
-      updateScriptBuffer(activeScript.id, event.detail);
+      editorActions.updateScriptBuffer(activeScript.id, event.detail);
     }
   }
   
-  function deleteScriptHandler(scriptId, event) {
+  async function deleteScriptHandler(scriptId, event) {
     event.stopPropagation(); // Prevent tab selection when clicking X
     
     // Don't allow deleting the last script
@@ -53,11 +55,13 @@
       return;
     }
     
-    deleteScript(scriptId);
+    try {
+      await deleteScript(scriptId);
+    } catch (error) {
+      console.error('Failed to delete script:', error);
+      editorActions.addConsoleMessage(`Failed to delete script: ${error.message}`, 'error');
+    }
   }
-  
-  import { onDestroy } from 'svelte';
-  onDestroy(unsubscribe);
 </script>
 
 <div class="script-tabs-container">

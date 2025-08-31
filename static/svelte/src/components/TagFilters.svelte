@@ -1,11 +1,30 @@
 <script>
-  import { toggleTag, clearAllFilters, selectedTagsSet, shaderFilters } from '../stores/shaders.js';
+  import { availableTags, selectedTags } from '../stores/selectors.js';
+  import { filterActions } from '../stores/actions.js';
   
-  export let tags = [];
+  $: tags = $availableTags;
+  $: activeTags = $selectedTags;
   
-  // Use the Set-based store for O(1) lookups and better reactivity
-  $: isActive = (tag) => $selectedTagsSet.has(tag);
-  $: selectedCount = $shaderFilters.tags.length;
+  // Helper function to get tag name from tag object or string
+  function getTagName(tag) {
+    return tag?.name || tag?.Name || tag || '';
+  }
+  
+  // Use the centralized selected tags for O(1) lookups
+  $: isActive = (tag) => {
+    const tagName = getTagName(tag);
+    return activeTags.includes(tagName);
+  };
+  $: selectedCount = activeTags.length;
+  
+  function handleTagClick(tag) {
+    const tagName = getTagName(tag);
+    filterActions.toggleTag(tagName);
+  }
+  
+  function clearAllTags() {
+    filterActions.clearFilters();
+  }
 </script>
 
 <div class="tag-filters" aria-label="Tag filters">
@@ -13,10 +32,10 @@
     <button type="button"
             class="tag-filter {isActive(t) ? 'active' : ''}"
             aria-pressed={isActive(t)}
-            on:click={() => toggleTag(t)}>{t}</button>
+            on:click={() => handleTagClick(t)}>{getTagName(t)}</button>
   {/each}
   {#if selectedCount > 0}
-    <button type="button" class="clear-all" on:click={clearAllFilters}>Clear Tags</button>
+    <button type="button" class="clear-all" on:click={clearAllTags}>Clear Tags</button>
   {/if}
 </div>
 

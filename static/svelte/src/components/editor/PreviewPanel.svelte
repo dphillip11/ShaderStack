@@ -1,23 +1,23 @@
 <script>
-  import { editorState } from '../../stores/editor.js';
+  import { editorActiveScript, editorRunning } from '../../stores/selectors.js';
 </script>
 
 <div class="preview-panel">
   <div class="panel-header">
     <h3>Preview</h3>
     <div class="preview-info">
-      {#if $editorState.activeScriptId}
-        <span class="active-script">Script {$editorState.activeScriptId}</span>
+      {#if $editorActiveScript}
+        <span class="active-script">Script {$editorActiveScript.id}</span>
       {/if}
       <div class="preview-status">
-        {#if $editorState.running}Running…{/if}
+        {#if $editorRunning}Running…{/if}
       </div>
     </div>
   </div>
   <div class="preview-content">
     <div class="webgpu-canvas-container">
       <canvas id="webgpu-canvas" width="512" height="512" aria-label="WebGPU preview"></canvas>
-      {#if !$editorState.activeScriptId}
+      {#if !$editorActiveScript}
         <div id="canvas-overlay">
           <div>No script selected</div>
         </div>

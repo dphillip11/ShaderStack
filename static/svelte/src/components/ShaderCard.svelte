@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { auth } from '../stores/auth.js';
+  import { isAuthenticated, authUserId } from '../stores/selectors.js';
+  import { navigationActions } from '../stores/actions.js';
 
   export let shader;
   const dispatch = createEventDispatcher();
@@ -15,18 +16,23 @@
   const tagNames = tagObjs.map(t => t.name || t.Name);
 
   // Check if current user owns this shader
-  $: isOwner = $auth.isAuthenticated && $auth.user_id === userId;
+  $: isOwner = $isAuthenticated && $authUserId === userId;
 
   function handleDelete(event) {
     event.preventDefault();
     event.stopPropagation();
     dispatch('delete', { shader, id, name });
   }
+
+  function viewShader(event) {
+    event.preventDefault();
+    navigationActions.navigate(`/${id}`);
+  }
 </script>
 
 <div class="shader-card" data-shader-id={id}>
   <div class="shader-header">
-    <h3 class="shader-title"><a href="/{id}">{name}</a></h3>
+    <h3 class="shader-title"><a href="/{id}" on:click={viewShader}>{name}</a></h3>
     <div class="shader-meta">
       {#if author}<span class="author">by {author}</span>{/if}
       <span class="shader-id">#{id}</span>
@@ -39,7 +45,7 @@
     </div>
   {/if}
   <div class="shader-actions">
-    <a href="/{id}" class="btn-secondary"><i class="fas fa-eye"></i> View</a>
+    <a href="/{id}" class="btn-secondary" on:click={viewShader}><i class="fas fa-eye"></i> View</a>
     {#if isOwner}
       <button class="btn-delete" on:click={handleDelete} title="Delete shader">
         <i class="fas fa-trash"></i> Delete

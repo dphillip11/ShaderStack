@@ -1,24 +1,124 @@
 import { 
-  editorState, 
-  setInitializing, 
-  setSaving, 
-  setRunning, 
-  setError, 
-  setWebGPUReady,
-  addConsoleMessage,
-  replaceAllScripts,
-  setShader,
-  registerWorkspace
-} from '../stores/editor.js';
+  appState,
+  updateAppState
+} from '../stores/app.js';
+
+import { 
+  editorActions,
+  uiActions
+} from '../stores/actions.js';
 
 import { 
   saveShaderProject,
   loadShaderProject,
-  createDefaultProject,
-  createDefaultScript
+  deleteShaderProject
 } from '../stores/api.js';
 
 import { get } from 'svelte/store';
+
+// Helper functions to work with the new store structure
+function setInitializing(value) {
+  updateAppState(state => ({
+    ...state,
+    editor: { ...state.editor, isInitializing: value }
+  }));
+}
+
+function setSaving(value) {
+  updateAppState(state => ({
+    ...state,
+    editor: { ...state.editor, isSaving: value }
+  }));
+}
+
+function setRunning(value) {
+  updateAppState(state => ({
+    ...state,
+    editor: { ...state.editor, isRunning: value }
+  }));
+}
+
+function setError(message) {
+  updateAppState(state => ({
+    ...state,
+    editor: { ...state.editor, error: message }
+  }));
+}
+
+function setWebGPUReady(ready) {
+  updateAppState(state => ({
+    ...state,
+    editor: { ...state.editor, webGPUReady: ready }
+  }));
+}
+
+function addConsoleMessage(message, type = 'info') {
+  editorActions.addConsoleMessage(message, type);
+}
+
+function replaceAllScripts(scripts) {
+  updateAppState(state => ({
+    ...state,
+    editor: { ...state.editor, scripts }
+  }));
+}
+
+function setShader(shader) {
+  updateAppState(state => ({
+    ...state,
+    editor: { ...state.editor, shader }
+  }));
+}
+
+function registerWorkspace(workspace) {
+  // Store workspace reference globally for access from components
+  if (typeof window !== 'undefined') {
+    window.__workspaceRef = workspace;
+  }
+}
+
+function createDefaultProject(name) {
+  return {
+    id: null,
+    name: name,
+    description: "",
+    tags: [],
+    shader_scripts: [createDefaultScript(0)]
+  };
+}
+
+function createDefaultScript(id) {
+  return {
+    id: id,
+    code: `@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
+    var pos = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>( 3.0, -1.0),
+        vec2<f32>(-1.0,  3.0)
+    );
+    return vec4<f32>(pos[vertex_index], 0.0, 1.0);
+}
+
+@fragment
+fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
+    let uv = fragCoord.xy / u.resolution;
+    return vec4<f32>(uv, 0.5, 1.0);
+}`,
+    buffer: {
+      format: "rgba8unorm",
+      width: 512,
+      height: 512
+    }
+  };
+}
+
+// Use appState instead of editorState
+const editorState = {
+  subscribe: (callback) => {
+    return appState.subscribe(state => callback(state.editor));
+  }
+};
 
 class ShaderCompiler {
   constructor() {
@@ -430,7 +530,7 @@ class WebGPUWorkspace {
     const state = get(editorState);
     console.log('loadInitialScripts: Current state:', state);
     
-    // If we already have scripts loaded (from window.shaderData), use them
+    // If we already have scripts loaded, use them
     if (state.scripts && state.scripts.length > 0) {
       console.log(`loadInitialScripts: Using existing shader data with ${state.scripts.length} scripts`);
       addConsoleMessage(`Using existing shader data with ${state.scripts.length} scripts`, 'info');
@@ -446,8 +546,8 @@ class WebGPUWorkspace {
       // Ensure we have an active script set
       if (!state.activeScriptId && state.scripts.length > 0) {
         console.log('loadInitialScripts: Setting active script to:', state.scripts[0].id);
-        const { setActiveScript } = await import('../stores/editor.js');
-        setActiveScript(state.scripts[0].id);
+        const { editorActions } = await import('../stores/actions.js');
+        editorActions.setActiveScript(state.scripts[0].id);
         addConsoleMessage(`Set active script to ${state.scripts[0].id}`, 'info');
         
         // Wait a bit for the state to update, then try to compile and show preview
@@ -475,10 +575,17 @@ class WebGPUWorkspace {
       return;
     }
     
-    // If we have a shader ID from the editor state, load it from the backend
-    if (state.shader?.id) {
+    // Check if we're on an editor route with a shader ID
+    const pathMatch = window.location.pathname.match(/^\/(\d+)$/);
+    const shaderIdFromURL = pathMatch ? parseInt(pathMatch[1]) : null;
+    
+    // Also check for /new route
+    const isNewShader = window.location.pathname === '/new';
+    
+    if (shaderIdFromURL) {
       try {
-        const projectData = await loadShaderProject(state.shader.id);
+        addConsoleMessage(`Loading shader ${shaderIdFromURL} from API...`, 'info');
+        const projectData = await loadShaderProject(shaderIdFromURL);
         this.currentProjectId = projectData.id;
         
         // Update the editor state with loaded data
@@ -500,11 +607,20 @@ class WebGPUWorkspace {
         return;
       } catch (error) {
         addConsoleMessage(`Failed to load shader project: ${error.message}`, 'error');
+        // Fall through to create new project
       }
     }
     
-    // Create default project if no shader exists or loading failed
-    await this.createNewProject();
+    // Create default project for new shaders or if loading failed
+    if (isNewShader || shaderIdFromURL) {
+      await this.createNewProject();
+    } else {
+      // Unknown route, create a local project
+      addConsoleMessage('Creating local project', 'info');
+      const defaultProject = createDefaultProject('Local Shader Project');
+      setShader(defaultProject);
+      replaceAllScripts(defaultProject.shader_scripts || []);
+    }
   }
 
   async compileAndShowInitialPreview() {
