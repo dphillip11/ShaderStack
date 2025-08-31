@@ -1,13 +1,14 @@
 <script>
-  import { auth, initAuth, logout } from '../stores/auth.js';
+  import { auth, getAuth, logout } from '../stores/auth.js';
   import LoginModal from './LoginModal.svelte';
   import { onMount } from 'svelte';
+  
   let state = { isAuthenticated:false, username:'' };
   let modal;
   let unsubscribe;
   onMount(()=>{ 
-    console.log('AuthBar onMount - calling initAuth');
-    initAuth(); 
+    console.log('AuthBar onMount - calling getAuth');
+    getAuth(); 
     unsubscribe = auth.subscribe(v=> {
       console.log('AuthBar auth state changed:', v);
       state=v;

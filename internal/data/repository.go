@@ -473,88 +473,108 @@ func (r *Repository) DeleteShader(id int) error {
 
 // SearchShaders performs efficient searching based on parameters
 func (r *Repository) SearchShaders(params models.SearchParams) []models.Shader {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	
-	var candidateIDs []int
-	
-	// Start with all shaders if no specific filters
-	if params.UserID == 0 && len(params.Tags) == 0 && params.ShaderID == 0 {
-		for id := range r.shaders {
-			candidateIDs = append(candidateIDs, id)
-		}
-	}
-	
-	// Filter by specific shader ID
-	if params.ShaderID != 0 {
-		if _, exists := r.shaders[params.ShaderID]; exists {
-			candidateIDs = []int{params.ShaderID}
-		} else {
-			return []models.Shader{}
-		}
-	}
-	
-	// Filter by user ID
-	if params.UserID != 0 {
-		candidateIDs = r.intersectIDs(candidateIDs, r.shadersByUser[params.UserID])
-	}
-	
-	// Filter by username
-	if params.Username != "" {
-		if user := r.usersByUsername[params.Username]; user != nil {
-			candidateIDs = r.intersectIDs(candidateIDs, r.shadersByUser[user.ID])
-		} else {
-			return []models.Shader{}
-		}
-	}
-	
-	// Filter by tags (intersection of all tags)
-	for _, tagName := range params.Tags {
-		tagName = strings.ToLower(tagName)
-		candidateIDs = r.intersectIDs(candidateIDs, r.shadersByTag[tagName])
-	}
-	
-	// Convert IDs to shaders and filter by name
-	var results []models.Shader
-	for _, id := range candidateIDs {
-		shader := r.shaders[id]
-		
-		// Filter by name if specified
-		if params.Name != "" && !strings.Contains(strings.ToLower(shader.Name), strings.ToLower(params.Name)) {
-			continue
-		}
-		
-		// Populate author field by looking up the user
-		if user := r.GetUserByID(shader.UserID); user != nil {
-			shader.Author = user.Username
-		} else {
-			shader.Author = "Unknown"
-		}
-		
-		results = append(results, shader)
-	}
-	
-	// Sort by ID (most recent first)
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].ID > results[j].ID
-	})
-	
-	// Apply pagination
-	if params.Page > 0 {
-		pageSize := 10
-		start := (params.Page - 1) * pageSize
-		end := start + pageSize
-		
-		if start >= len(results) {
-			return []models.Shader{}
-		}
-		if end > len(results) {
-			end = len(results)
-		}
-		results = results[start:end]
-	}
-	
-	return results
+    r.mu.RLock()
+    defer r.mu.RUnlock()
+    
+    var candidateIDs []int
+
+    // Start with all shaders if no specific filters
+    if params.UserID == 0 && len(params.Tags) == 0 && params.Query == "" {
+        for id := range r.shaders {
+            candidateIDs = append(candidateIDs, id)
+        }
+    } else if params.Query != "" {
+        // Query is inclusive - search across shader names, usernames, and tag names
+        queryLower := strings.ToLower(params.Query)
+        candidateMap := make(map[int]bool)
+        
+        // Search shader names
+        for id, shader := range r.shaders {
+            if strings.Contains(strings.ToLower(shader.Name), queryLower) {
+                candidateMap[id] = true
+            }
+        }
+        
+        // Search usernames
+        for _, user := range r.users {
+            if strings.Contains(strings.ToLower(user.Username), queryLower) {
+                // Add all shaders by this user
+                for _, shaderID := range r.shadersByUser[user.ID] {
+                    candidateMap[shaderID] = true
+                }
+            }
+        }
+        
+        // Search tag names
+        for _, tag := range r.tags {
+            if strings.Contains(strings.ToLower(tag.Name), queryLower) {
+                // Add all shaders with this tag
+                for _, shaderID := range r.shadersByTag[strings.ToLower(tag.Name)] {
+                    candidateMap[shaderID] = true
+                }
+            }
+        }
+        
+        // Convert map to slice
+        for id := range candidateMap {
+            candidateIDs = append(candidateIDs, id)
+        }
+    } else {
+        // No query, start with all shaders for other filters
+        for id := range r.shaders {
+            candidateIDs = append(candidateIDs, id)
+        }
+    }
+    
+    // Filter by user ID (exact match)
+    if params.UserID != 0 {
+        candidateIDs = r.intersectIDs(candidateIDs, r.shadersByUser[params.UserID])
+    }
+    
+    // Filter by tags (intersection - shader must have ALL specified tags)
+    for _, tagName := range params.Tags {
+        tagName = strings.ToLower(tagName)
+        candidateIDs = r.intersectIDs(candidateIDs, r.shadersByTag[tagName])
+    }
+    
+    // Convert IDs to shaders with early exit for pagination
+    var results []models.Shader
+    skipped := 0
+    collected := 0
+    
+    // Calculate how many we need to collect
+    limit := params.Limit
+    if limit <= 0 {
+        limit = len(candidateIDs) // No limit means collect all
+    }
+    
+    // Iterate through candidate IDs (no sorting for efficiency)
+    for _, id := range candidateIDs {
+        shader := r.shaders[id]
+        
+        // Skip records for pagination offset
+        if skipped < params.Offset {
+            skipped++
+            continue
+        }
+        
+        // Populate author field by looking up the user
+        if user := r.GetUserByID(shader.UserID); user != nil {
+            shader.Author = user.Username
+        } else {
+            shader.Author = "Unknown"
+        }
+        
+        results = append(results, shader)
+        collected++
+        
+        // Early exit when we have enough results
+        if collected >= limit {
+            break
+        }
+    }
+    
+    return results
 }
 
 // Helper function to intersect two slices of IDs

@@ -67,10 +67,67 @@ func Login(w http.ResponseWriter, r *http.Request) {
     })
 
     w.Header().Set("Content-Type", "application/json")
-    response := map[string]interface{}{
-        "message":  "Login successful",
-        "user_id":  user.ID,
-        "username": user.Username,
+    response := models.AuthenticationInfo{
+        IsAuthenticated:  true,
+        UserID:  user.ID,
+        Username: user.Username,
+    }
+    json.NewEncoder(w).Encode(response)
+}
+
+// Register handles POST requests for registration
+func Register(w http.ResponseWriter, r *http.Request) {
+    var registration models.LoginRequest
+    if err := json.NewDecoder(r.Body).Decode(&registration); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    // Check if user already exists
+    existingUser := data.GetRepository().GetUserByUsername(registration.Username)
+    if existingUser != nil {
+        http.Error(w, "Username already taken", http.StatusConflict)
+        return
+    }
+    
+    // Create new user
+    user := models.User{
+        Username: registration.Username,
+        Password: registration.Password,
+    }
+    createdUser, err := data.GetRepository().CreateUser(user)
+    if err != nil {
+        http.Error(w, "Failed to create user: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Automatically log in the new user
+    token := generateToken()
+    session := models.Session{
+        Token:  token,
+        UserID: user.ID,
+    }
+
+    sessionsMu.Lock()
+    sessions[token] = session
+    sessionsMu.Unlock()
+
+    // Set cookie
+    http.SetCookie(w, &http.Cookie{
+        Name:     "session_token",
+        Value:    token,
+        Path:     "/",
+        HttpOnly: true,
+        Secure:   false, // Set to true in production with HTTPS
+        SameSite: http.SameSiteLaxMode,
+        Expires:  time.Now().Add(24 * time.Hour),
+    })
+
+    w.Header().Set("Content-Type", "application/json")
+    response := models.AuthenticationInfo{
+        IsAuthenticated:  true,
+        UserID:  user.ID,
+        Username: user.Username,
     }
     json.NewEncoder(w).Encode(response)
 }
@@ -101,7 +158,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // AuthMiddleware checks if user is authenticated
-func BlockingAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         cookie, err := r.Cookie("session_token")
         if (err != nil) {
@@ -135,6 +192,55 @@ func BlockingAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
     }
 }
 
+// GetAuthInfo returns authentication information for the current user
+func GetAuthInfo(w http.ResponseWriter, r *http.Request) {
+    cookie, err := r.Cookie("session_token")
+    if err != nil {
+        // Not authenticated
+        w.Header().Set("Content-Type", "application/json")
+        response := models.AuthenticationInfo{
+            IsAuthenticated: false,
+        }
+        json.NewEncoder(w).Encode(response)
+        return
+    }
+
+    sessionsMu.Lock()
+    session, exists := sessions[cookie.Value]
+    sessionsMu.Unlock()
+
+    if !exists {
+        // Invalid session
+        w.Header().Set("Content-Type", "application/json")
+        response := models.AuthenticationInfo{
+            IsAuthenticated: false,
+        }
+        json.NewEncoder(w).Encode(response)
+        return
+    }
+
+    // Find the user to get username
+    user := data.GetRepository().GetUserByID(session.UserID)
+    if user == nil {
+        // User not found
+        w.Header().Set("Content-Type", "application/json")
+        response := models.AuthenticationInfo{
+            IsAuthenticated: false,
+        }
+        json.NewEncoder(w).Encode(response)
+        return
+    }
+
+    // Return authenticated user info
+    w.Header().Set("Content-Type", "application/json")
+    response := models.AuthenticationInfo{
+        IsAuthenticated: true,
+        Username:        user.Username,
+        UserID:          user.ID,
+    }
+    json.NewEncoder(w).Encode(response)
+}
+
 // generateToken creates a random session token
 func generateToken() string {
     bytes := make([]byte, 32)
@@ -145,7 +251,16 @@ func generateToken() string {
 // Shader API handlers
 func GetShaders(w http.ResponseWriter, r *http.Request) {
     repo := data.GetRepository()
-    params := models.SearchParams{} // Get all shaders
+
+    query := r.URL.Query()
+    params := models.SearchParams{
+        Query:  query.Get("name"),
+        Tags:   query["tags"],
+        UserID: parseUserID(query.Get("user_id")),
+        Limit:  parseLimit(query.Get("limit"), 50),
+        Offset: parseOffset(query.Get("offset"), 0),
+    }
+    
     shaders := repo.SearchShaders(params)
     
     w.Header().Set("Content-Type", "application/json")

@@ -43,12 +43,11 @@ type Session struct {
 }
 
 type SearchParams struct {
-    Name     string   `json:"name,omitempty"`
-    Page     int      `json:"page,omitempty"`
+    Query     string   `json:"name,omitempty"`
     Tags     []string `json:"tags,omitempty"`
-    Username string   `json:"username,omitempty"`
     UserID   int      `json:"user_id,omitempty"`
-    ShaderID int      `json:"shader_id,omitempty"`
+    Limit   int      `json:"limit,omitempty"`
+    Offset  int      `json:"offset,omitempty"`
 }
 
 type AuthenticationInfo struct {

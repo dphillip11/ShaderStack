@@ -1,69 +1,15 @@
 <script>
-  import { onMount } from 'svelte';
   import BrowsePage from './components/BrowsePage.svelte';
   import EditorPage from './components/EditorPage.svelte';
-  import { shaders, loadInitialShaders } from './stores/shaders.js';
-  import { setShader, replaceAllScripts } from './stores/editor.js';
-
-  let page = 'browse';
-
-  function derivePage(path){
-    if(path === '/' || path === '') return 'browse';
-    if(path === '/my') return 'browse';
-    if(path === '/new') return 'editor';
-    if(/^\/[0-9]+$/.test(path)) return 'editor';
-    return 'browse';
-  }
-
-  function setPageFromLocation(){
-    const p = derivePage(window.location.pathname);
-    if(page !== p){ page = p; }
-  }
-
-  function initializeEditorData() {
-    // Initialize editor with shader data from the backend if available
-    if (window.shaderData && page === 'editor') {
-      console.log('App.svelte: Initializing editor with shader data:', window.shaderData);
-      
-      // Set the shader data in the editor state
-      setShader(window.shaderData);
-      
-      // Set the scripts array from shader_scripts
-      const scripts = window.shaderData.shader_scripts || [];
-      replaceAllScripts(scripts);
-      
-      console.log('App.svelte: Editor initialized with', scripts.length, 'scripts');
-    }
-  }
-
-  onMount(() => {
-    console.log('App.svelte onMount - window.__AUTH__:', window.__AUTH__);
-    console.log('App.svelte onMount - window.__PAGE__:', window.__PAGE__);
-    console.log('App.svelte onMount - window.shaderData:', window.shaderData);
-    
-    if (window.__PAGE__) page = window.__PAGE__;
-    else setPageFromLocation();
-    
-    // Initialize editor data first, then load shaders for browse page
-    initializeEditorData();
-    
-    if (page === 'browse') loadInitialShaders();
-    window.addEventListener('popstate', setPageFromLocation);
-    // Removed click interception for now to allow full page loads (ensures shaderData + auth state)
-  });
-
-  $: if (page === 'browse') { /* ensure shaders loaded when returning */ loadInitialShaders(); }
-  $: if (page === 'editor') { /* ensure editor data loaded when switching to editor */ initializeEditorData(); }
+  import { pageState } from './stores/page.js';
+  import NavBar from './components/NavBar.svelte';
 </script>
 
-{#if page === 'browse'}
+<NavBar/>
+{#if $pageState.page === 'browse'}  <!-- Fixed: Added $ for reactive store -->
   <BrowsePage />
-{:else if page === 'editor'}
+{:else if $pageState.page === 'editor'}  <!-- Fixed: Added $ for reactive store -->
   <EditorPage />
 {:else}
-  <div class="placeholder">Page {page} not yet migrated to Svelte.</div>
+  <h3>404 : Page not found</h3>
 {/if}
-
-<style>
-  .placeholder { padding: 2rem; font-style: italic; opacity: .7; }
-</style>

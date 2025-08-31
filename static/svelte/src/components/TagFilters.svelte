@@ -1,4 +1,5 @@
 <script>
+  import { tags } from '../stores/tags.js';
   import { toggleTag, clearAllFilters, selectedTagsSet, shaderFilters } from '../stores/shaders.js';
   
   export let tags = [];

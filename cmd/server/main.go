@@ -24,16 +24,18 @@ func main() {
 
     // Authentication routes
     r.HandleFunc("/api/login", handlers.Login).Methods("POST")
+    r.HandleFunc("/api/register", handlers.Register).Methods("POST")
+    r.HandleFunc("/api/auth", handlers.GetAuthInfo).Methods("GET")
     r.HandleFunc("/api/logout", handlers.Logout).Methods("POST")
     fmt.Println("Auth routes added...")
 
     // API routes for shaders - Fixed to match frontend expectations
     r.HandleFunc("/api/shaders", handlers.GetShaders).Methods("GET")
-    r.HandleFunc("/api/shaders", handlers.BlockingAuthMiddleware(handlers.CreateShaderAPI)).Methods("POST")
+    r.HandleFunc("/api/shaders", handlers.AuthMiddleware(handlers.CreateShaderAPI)).Methods("POST")
     r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.GetShader).Methods("GET")
-    r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.BlockingAuthMiddleware(handlers.UpdateShader)).Methods("PUT")
-    r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.BlockingAuthMiddleware(handlers.DeleteShader)).Methods("DELETE")
-    r.HandleFunc("/api/shaders/{id:[0-9]+}/properties", handlers.BlockingAuthMiddleware(handlers.UpdateShaderProperties)).Methods("PUT")
+    r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.AuthMiddleware(handlers.UpdateShader)).Methods("PUT")
+    r.HandleFunc("/api/shaders/{id:[0-9]+}", handlers.AuthMiddleware(handlers.DeleteShader)).Methods("DELETE")
+    r.HandleFunc("/api/shaders/{id:[0-9]+}/properties", handlers.AuthMiddleware(handlers.UpdateShaderProperties)).Methods("PUT")
     fmt.Println("API routes added...")
 
     // API routes for tags
@@ -45,11 +47,7 @@ func main() {
     }).Methods("GET")
 
     // Web routes - specific routes first, then general ones
-    r.HandleFunc("/", handlers.RenderBrowse).Methods("GET")
-    r.HandleFunc("/my", handlers.AuthMiddleware(handlers.RenderMy)).Methods("GET")
-    r.HandleFunc("/new", handlers.RenderEditor).Methods("GET")
-    r.HandleFunc("/{id:[0-9]+}", handlers.RenderEditor).Methods("GET")
-    fmt.Println("Web routes added...")
+    r.HandleFunc("/", handlers.RenderApp).Methods("GET")
 
     // Static file serving with caching
     r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", cacheFileServer("static")))

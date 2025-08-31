@@ -1,147 +1,56 @@
 import { writable, derived } from 'svelte/store';
-import { apiGet } from './api.js';
+import { apiGet } from '../repository/backend_api.js';
+import { filters } from './search.js';
 
-// Raw shaders collection
-export const shaders = writable([]); // [{ id, name, author, shader_scripts:[{code}], tags:[{name}] }]
-// Tag list (canonical)
-export const tags = writable([]);
-// Filter criteria (single source of truth for browse page state)
-export const shaderFilters = writable({ name: '', tags: [] });
+// Raw shaders collection from API
+export const shaders = writable([]);
 
-// Derived: Set of selected tags for O(1) lookup and better reactivity
-export const selectedTagsSet = derived(shaderFilters, $filters => new Set($filters.tags));
+// Loading state
+export const loading = writable(false);
 
-// Derived: filtered shaders applying current filters
-export const filteredShaders = derived([shaders, shaderFilters], ([all, f]) => {
-  const searchQuery = f.name.trim().toLowerCase();
-  return all.filter(s => {
-    // If there's a search query, check across multiple fields
-    if (searchQuery) {
-      const shaderName = (s.name || '').toLowerCase();
-      const authorName = (s.author || s.Author || '').toLowerCase();
-      const codeSample = (s.shader_scripts?.[0]?.code || '').toLowerCase();
-      
-      // Get all tag names for this shader
-      const shaderTagNames = (s.tags || s.Tags || [])
-        .map(t => (t.name || t.Name || '').toLowerCase());
-      
-      // Check if search query matches any of these fields
-      const matchesName = shaderName.includes(searchQuery);
-      const matchesAuthor = authorName.includes(searchQuery);
-      const matchesCode = codeSample.includes(searchQuery);
-      const matchesTags = shaderTagNames.some(tagName => tagName.includes(searchQuery));
-      
-      // Return false if no matches found
-      if (!matchesName && !matchesAuthor && !matchesCode && !matchesTags) {
-        return false;
-      }
-    }
-    
-    // Apply tag filters (existing functionality)
-    if (f.tags.length) {
-      const shaderTagNames = (s.tags || s.Tags || []).map(t => t.name || t.Name);
-      if (!f.tags.every(t => shaderTagNames.includes(t))) return false;
-    }
-    
-    return true;
-  });
+// Auto-fetch shaders when filters change
+let searchTimeout;
+
+filters.subscribe($filters => {
+  // Debounce API calls to avoid too many requests during typing
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    fetchShaders($filters);
+  }, 300); // 300ms debounce
 });
 
-// Derived: unique tags from server (fallback to aggregating shader tags)
-export const availableTags = derived([tags, shaders], ([explicit, all]) => {
-  if (explicit.length) return explicit.map(t => t.name || t.Name);
-  const set = new Set();
-  all.forEach(s => (s.tags || s.Tags || []).forEach(t => set.add(t.name || t.Name)));
-  return Array.from(set).sort();
-});
-
-let loaded = false;
-export async function loadInitialShaders() {
-  if (loaded) return;
-  
-  // Check if we're on the "My Shaders" page with pre-loaded data
-  if (typeof window !== 'undefined' && window.myShaders) {
-    const myData = window.myShaders;
-    shaders.set(myData.shaders || []);
-    // For "My Shaders" page, we don't need to load all tags from API
-    // Just extract tags from the user's shaders
-    const userTags = new Set();
-    myData.shaders.forEach(shader => {
-      (shader.tags || shader.Tags || []).forEach(tag => {
-        userTags.add(tag.name || tag.Name);
-      });
-    });
-    tags.set(Array.from(userTags).sort().map(name => ({ name })));
-    syncFiltersFromURL();
-    loaded = true;
-    return;
-  }
+// Fetch shaders from API with current filters
+async function fetchShaders(filterParams) {
+  loading.set(true);
   
   try {
-    const [shaderData, tagData] = await Promise.all([
-      apiGet('/api/shaders'),
-      apiGet('/api/tags').catch(() => [])
-    ]);
+    const params = new URLSearchParams();
+    
+    // Build query parameters
+    if (filterParams.query) params.set('query', filterParams.query);
+    if (filterParams.user_id) params.set('user_id', filterParams.user_id);
+    if (filterParams.tags?.length) {
+      filterParams.tags.forEach(tag => params.append('tags', tag));
+    }
+    if (filterParams.limit) params.set('limit', filterParams.limit);
+    if (filterParams.offset) params.set('offset', filterParams.offset);
+    
+    const queryString = params.toString();
+    const url = `/api/shaders${queryString ? '?' + queryString : ''}`;
+    
+    const shaderData = await apiGet(url);
     shaders.set(shaderData || []);
-    tags.set(tagData || []);
-    syncFiltersFromURL();
-    loaded = true;
+    
   } catch (e) {
     console.error('Failed loading shaders:', e);
+    shaders.set([]);
+  } finally {
+    loading.set(false);
   }
 }
 
-// URL sync (separate pure helpers)
-function parseURLFilters() {
-  const p = new URLSearchParams(location.search);
-  return {
-    name: p.get('name') || '',
-    tags: p.getAll('tags')
-  };
-}
-
-export function syncFiltersFromURL() {
-  shaderFilters.update(f => ({ ...f, ...parseURLFilters() }));
-}
-
-export function applyFilters(partial) {
-  shaderFilters.update(f => ({ ...f, ...partial }));
-  const f = parseCurrentFilters();
-  const params = new URLSearchParams();
-  if (f.name) params.set('name', f.name);
-  f.tags.forEach(t => params.append('tags', t));
-  const qs = params.toString();
-  const newURL = location.pathname + (qs ? '?' + qs : '');
-  history.replaceState(null, '', newURL);
-}
-
-function parseCurrentFilters() {
-  let value; shaderFilters.subscribe(v => value = v)();
-  return value;
-}
-
-export function toggleTag(tag) {
-  shaderFilters.update(f => {
-    const exists = f.tags.includes(tag);
-    const tags = exists ? f.tags.filter(t => t !== tag) : [...f.tags, tag];
-    return { ...f, tags };
-  });
-  applyFilters({});
-}
-
-export function clearSearch() { applyFilters({ name: '' }); }
-export function clearAllFilters() { applyFilters({ name: '', tags: [] }); }
-
-// Function to refresh shaders data from the server
+// Force refresh
 export async function refreshShaders() {
-  try {
-    const [shaderData, tagData] = await Promise.all([
-      apiGet('/api/shaders'),
-      apiGet('/api/tags').catch(() => [])
-    ]);
-    shaders.set(shaderData || []);
-    tags.set(tagData || []);
-  } catch (e) {
-    console.error('Failed refreshing shaders:', e);
-  }
+  const currentFilters = get(filters);
+  await fetchShaders(currentFilters);
 }

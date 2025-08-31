@@ -2,20 +2,14 @@ import { writable } from 'svelte/store';
 
 export const auth = writable({ isAuthenticated: false, username: '', user_id: null });
 
-export function initAuth() {
-  console.log('initAuth called - window.__AUTH__:', window.__AUTH__);
-  if (typeof window !== 'undefined' && window.__AUTH__) {
-    const authData = {
-      isAuthenticated: !!window.__AUTH__.isAuthenticated,
-      username: window.__AUTH__.username || '',
-      user_id: window.__AUTH__.user_id || null
-    };
-    console.log('Setting auth data:', authData);
-    auth.set(authData);
-  } else {
-    console.log('No window.__AUTH__ found, setting unauthenticated');
-    auth.set({ isAuthenticated: false, username: '', user_id: null });
-  }
+export async function getAuth() {
+  const res = await fetch('/api/auth', {
+    method: 'GET',
+    credentials: 'include'
+  });
+  if (!res.ok) throw new Error(await res.text() || 'Get Auth data failed');
+  const data = await res.json();
+  auth.set({ isAuthenticated: data.isAuthenticated, username: data.username, user_id: data.user_id });
 }
 
 export async function login(username, password) {

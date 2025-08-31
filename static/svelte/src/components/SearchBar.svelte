@@ -1,38 +1,25 @@
 <script>
-  import { applyFilters, clearSearch } from '../stores/shaders.js';
-  export let filters = { name: '' };
-  let q = filters.name;
-  
-  // Only update q from filters if it's different and user isn't actively typing
-  $: if (filters.name !== q && document.activeElement?.tagName !== 'INPUT') {
-    q = filters.name;
-  }
+  import { filters, setQuery, clearFilters } from '../stores/search.js';
   
   function submit(e){ 
     e.preventDefault(); 
-    applyFilters({ name: q }); 
-  }
-  
-  function onClear(){ 
-    q = '';
-    clearSearch(); 
   }
   
   function onInput(e) {
-    q = e.target.value;
+    setQuery( e.target.value );
   }
 </script>
 
 <form class="search-bar" on:submit={submit} role="search" aria-label="Shader search">
   <input 
-    placeholder="Search by name, author, tags, or code..." 
-    value={q}
+    placeholder="Search by name, author, tags" 
+    value={$filters.query}
     on:input={onInput}
     aria-label="Search term" 
   />
   <button type="submit">Search</button>
-  {#if q}
-    <button type="button" on:click={onClear} aria-label="Clear search">×</button>
+  {#if filters.query}
+    <button type="button" on:click={clearFilters} aria-label="Clear search">×</button>
   {/if}
 </form>
 
@@ -67,6 +54,43 @@
   .search-bar input:focus {
     outline: none;
     border-color: #667eea;
+  }
+
+  .search-bar button[type="submit"] {
+    background-color: #3182ce;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .search-bar button[type="submit"]:hover {
+    background-color: #2c5aa0;
+  }
+
+  .search-bar button[type="submit"]:active {
+    background-color: #2a4a8b;
+    transform: translateY(1px);
+  }
+
+  .search-bar button[type="button"] {
+    background-color: #e53e3e;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 5px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    line-height: 1;
+  }
+
+  .search-bar button[type="button"]:hover {
+    background-color: #c53030;
   }
 
   .search-results-info {
