@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { auth } from '../stores/auth.js';
+  import {dataManager, user} from '../stores/dataManager.js';
 
   export let shader;
   const dispatch = createEventDispatcher();
@@ -15,12 +15,12 @@
   const tagNames = tagObjs.map(t => t.name || t.Name);
 
   // Check if current user owns this shader
-  $: isOwner = $auth.isAuthenticated && $auth.user_id === userId;
+  $: isOwner = $user.is_authenticated && $user.user_id === userId;
 
   function handleDelete(event) {
     event.preventDefault();
     event.stopPropagation();
-    dispatch('delete', { shader, id, name });
+    dataManager.deleteShader(id);
   }
 </script>
 

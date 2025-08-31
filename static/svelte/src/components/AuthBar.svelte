@@ -1,20 +1,10 @@
 <script>
-  import { auth, getAuth, logout } from '../stores/auth.js';
+  import { dataManager, user, logoutUser } from '../stores/dataManager.js';
   import LoginModal from './LoginModal.svelte';
   import { onMount } from 'svelte';
   
-  let state = { isAuthenticated:false, username:'' };
   let modal;
-  let unsubscribe;
-  onMount(()=>{ 
-    console.log('AuthBar onMount - calling getAuth');
-    getAuth(); 
-    unsubscribe = auth.subscribe(v=> {
-      console.log('AuthBar auth state changed:', v);
-      state=v;
-    }); 
-    return ()=>unsubscribe&&unsubscribe(); 
-  });
+
   function openLogin(){ 
     console.log('AuthBar openLogin called, modal:', modal);
     if (modal && typeof modal.open === 'function') {
@@ -23,12 +13,11 @@
       console.error('Modal reference is null or open() not available:', modal);
     }
   }
-  function doLogout(){ logout(); }
 </script>
 <div class="auth-bar">
-  {#if state.isAuthenticated}
-    <span class="user"><i class="fas fa-user"></i> {state.username}</span>
-    <button class="btn-small" on:click={doLogout} aria-label="Logout"><i class="fas fa-sign-out-alt"></i></button>
+  {#if $user.is_authenticated}
+    <span class="user"><i class="fas fa-user"></i> {$user.username}</span>
+    <button class="btn-small" on:click={logoutUser()} aria-label="Logout"><i class="fas fa-sign-out-alt"></i></button>
   {:else}
     <button class="btn-small primary" on:click={openLogin} aria-label="Login"><i class="fas fa-sign-in-alt"></i> Login</button>
   {/if}

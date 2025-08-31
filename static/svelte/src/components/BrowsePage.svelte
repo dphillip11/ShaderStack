@@ -3,13 +3,10 @@
   import TagFilters from './TagFilters.svelte';
   import ShaderGrid from './ShaderGrid.svelte';
   import DeleteConfirmDialog from './DeleteConfirmDialog.svelte';
-  import { filteredShaders, availableTags, shaderFilters, refreshShaders } from '../stores/shaders.js';
-  import { deleteShaderProject } from '../stores/api.js';
+  import { error, deleteShader } from '../stores/shaders.js';
   import { onMount } from 'svelte';
+  import { shaders, loading } from '../stores/DataManager.js';
 
-  let list = [];
-  let tags = [];
-  let filters;
   let pageTitle = 'Browse Shaders';
   let showDeleteDialog = false;
   let shaderToDelete = null;
@@ -19,12 +16,6 @@
   if (typeof window !== 'undefined' && window.myShaders) {
     pageTitle = window.myShaders.title || 'My Shaders';
   }
-
-  const unsub = [
-    filteredShaders.subscribe(v => list = v),
-    availableTags.subscribe(v => tags = v),
-    shaderFilters.subscribe(v => filters = v)
-  ];
 
   function handleShaderDelete(event) {
     const { shader, id, name } = event.detail;
@@ -43,22 +34,20 @@
     
     try {
       isDeleting = true;
-      await deleteShaderProject(shaderToDelete.id);
+      const result = await deleteShader(shaderToDelete.id);
       
-      // Refresh the shader list to remove the deleted shader
-      await refreshShaders();
-      
-      // Hide dialog and reset state
-      hideDeleteDialog();
-      
-      console.log(`Shader "${shaderToDelete.name}" deleted successfully`);
+      if (result.success) {
+        console.log(`Shader "${shaderToDelete.name}" deleted successfully`);
+        hideDeleteDialog();
+      } else {
+        console.error('Delete failed:', result.error);
+      }
     } catch (error) {
       console.error('Delete failed:', error);
-      isDeleting = false; // Re-enable UI on error
+    } finally {
+      isDeleting = false;
     }
   }
-
-  onMount(() => () => unsub.forEach(u => u()));
 </script>
 
 <section class="browse-svelte" aria-label="{pageTitle}">
@@ -70,9 +59,17 @@
       <p class="page-description">Discover and explore community shaders</p>
     {/if}
   </div>
-  <SearchBar {filters} />
-  <TagFilters {tags} />
-  <ShaderGrid {list} on:delete={handleShaderDelete} />
+
+  <SearchBar />
+  <TagFilters />
+  
+  {#if $loading}
+    <div class="loading">Loading shaders...</div>
+  {:else if $error}
+    <div class="error">Error: {$error}</div>
+  {:else}
+    <ShaderGrid list={$shaders} on:delete={handleShaderDelete} />
+  {/if}
 </section>
 
 <!-- Delete Confirmation Dialog -->
@@ -85,12 +82,10 @@
 />
 
 <style>
-  .browse-svelte { display: flex; flex-direction: column; gap: 1rem; }
-
-  .browse-page {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 2rem;
+  .browse-svelte { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 1rem; 
   }
 
   .page-header {
@@ -109,11 +104,21 @@
     color: #718096;
   }
 
-  .loading {
+  .loading, .error {
     text-align: center;
     padding: 4rem 2rem;
-    color: #718096;
     font-size: 1.1rem;
+  }
+
+  .loading {
+    color: #718096;
+  }
+
+  .error {
+    color: #e53e3e;
+    background-color: #fed7d7;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
   }
 
   .loading::after {
@@ -128,22 +133,14 @@
     animation: spin 1s linear infinite;
   }
 
-  .pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 1rem;
-    padding: 2rem 0;
-  }
-
-  .page-info {
-    color: #718096;
-    font-weight: 500;
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 
   @media (max-width: 768px) {
-    .browse-page {
-      padding: 0 1rem;
+    .page-header h1 {
+      font-size: 2rem;
     }
   }
 </style>

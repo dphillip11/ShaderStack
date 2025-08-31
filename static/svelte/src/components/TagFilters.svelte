@@ -1,12 +1,10 @@
 <script>
-  import { tags } from '../stores/tags.js';
-  import { toggleTag, clearAllFilters, selectedTagsSet, shaderFilters } from '../stores/shaders.js';
-  
-  export let tags = [];
+  import { tags } from '../stores/dataManager.js';
+  import { filters, clearFilters } from '../stores/search.js';
   
   // Use the Set-based store for O(1) lookups and better reactivity
-  $: isActive = (tag) => $selectedTagsSet.has(tag);
-  $: selectedCount = $shaderFilters.tags.length;
+  $: isActive = (tag) => $tags.has(tag);
+  $: selectedCount = $filters.tags.length;
 </script>
 
 <div class="tag-filters" aria-label="Tag filters">
@@ -17,7 +15,7 @@
             on:click={() => toggleTag(t)}>{t}</button>
   {/each}
   {#if selectedCount > 0}
-    <button type="button" class="clear-all" on:click={clearAllFilters}>Clear Tags</button>
+    <button type="button" class="clear-all" on:click={clearFilters}>Clear Tags</button>
   {/if}
 </div>
 

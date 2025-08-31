@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { editorState, activeScript, addConsoleMessage, setActiveScript, updateScriptCode, updateShaderName, setShaderTags } from '../stores/editor.js';
-  import { auth } from '../stores/auth.js';
+  import { user } from '../stores/dataManager.js';
   import { initWorkspace, runAll, saveShader, compileActive, startRealTime, stopRealTime, isRealTimeRunning, startAutoSave, stopAutoSave } from '../adapters/workspaceAdapter.js';
   import ScriptTabs from './editor/ScriptTabs.svelte';
   import CodeEditor from './editor/CodeEditor.svelte';
@@ -18,8 +18,8 @@
   const realTimeRunning = isRealTimeRunning;
 
   // Check if user is authenticated and owns the current shader
-  $: isAuthenticated = $auth.isAuthenticated;
-  $: currentUserId = $auth.user_id; // Assuming username is unique identifier
+  $: isAuthenticated = $user.is_authenticated;
+  $: currentUserId = $user.user_id; // Assuming username is unique identifier
   $: shaderOwnerId = $state.shader?.user_id || $state.shader?.user_id;
   $: canEdit = isAuthenticated && (currentUserId === shaderOwnerId || !$state.shader?.id); // Can edit if owner or new shader
 

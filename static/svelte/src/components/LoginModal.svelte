@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { login } from '../stores/auth.js';
+  import { login } from '../stores/dataManager.js';
   const dispatch = createEventDispatcher();
   let username = '';
   let password = '';

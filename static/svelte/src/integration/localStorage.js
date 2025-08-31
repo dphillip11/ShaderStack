@@ -1,5 +1,5 @@
 import { DataInterface } from './dataInterface.js';
-import { OFFLINE_USER } from '../stores/user.js';
+import { OFFLINE_USER } from '../stores/dataManager.js';
 
 const STORAGE_KEY = 'webgpu_shaders';
 

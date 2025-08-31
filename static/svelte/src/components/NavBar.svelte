@@ -1,10 +1,10 @@
 <script>
-    import { auth } from '../stores/auth.js';
+    import { user } from '../stores/dataManager.js';
     import { BrowsePage, EditorPage } from '../stores/page.js';
     import AuthBar from './AuthBar.svelte';
 
-  $: authenticated = $auth.isAuthenticated;
-  $: username = $auth.username;
+  $: authenticated = $user.isAuthenticated;
+  $: username = $user.username;
 </script>
 
 <header class="navbar">

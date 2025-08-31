@@ -1,14 +1,7 @@
-import { writable } from 'svelte/store';
+import { derived } from 'svelte/store';
+import { tags } from './dataManager.js';
 
-// list of all tags
-export const tags = writable([]);
-
-export async function fetchTags() {
-  try {
-    // Load tags list first
-    const tagData = await apiGet('/api/tags');
-    tags.set(tagData || []);
-  } catch (e) {
-    console.error('Failed to fetch tags:', e);
-  }
-}
+// Derived: available tags as sorted array of names
+export const availableTags = derived(tags, $tags => 
+  $tags.map(t => t.name || t.Name).sort()
+);
