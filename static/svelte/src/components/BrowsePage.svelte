@@ -3,9 +3,8 @@
   import TagFilters from './TagFilters.svelte';
   import ShaderGrid from './ShaderGrid.svelte';
   import DeleteConfirmDialog from './DeleteConfirmDialog.svelte';
-  import { error, deleteShader } from '../stores/shaders.js';
   import { onMount } from 'svelte';
-  import { shaders, loading } from '../stores/DataManager.js';
+  import { shaders } from '../stores/shaders.js';
 
   let pageTitle = 'Browse Shaders';
   let showDeleteDialog = false;
@@ -34,7 +33,7 @@
     
     try {
       isDeleting = true;
-      const result = await deleteShader(shaderToDelete.id);
+      const result = await dataManager.deleteShader(shaderToDelete.id);
       
       if (result.success) {
         console.log(`Shader "${shaderToDelete.name}" deleted successfully`);
@@ -63,11 +62,7 @@
   <SearchBar />
   <TagFilters />
   
-  {#if $loading}
-    <div class="loading">Loading shaders...</div>
-  {:else if $error}
-    <div class="error">Error: {$error}</div>
-  {:else}
+  {#if $shaders}
     <ShaderGrid list={$shaders} on:delete={handleShaderDelete} />
   {/if}
 </section>

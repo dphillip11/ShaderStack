@@ -1,6 +1,6 @@
 <script>
   import { editorState, setActiveScript, updateScriptBuffer, deleteScript } from '../../stores/editor.js';
-  import { addScript, updatePreview } from '../../adapters/workspaceAdapter.js';
+  import { updatePreview } from '../../adapters/workspaceAdapter.js';
   import BufferControls from './BufferControls.svelte';
   
   let state;
@@ -33,7 +33,7 @@
     }
   }
   
-  function add(){ addScript(); }
+  function add(){ dataManager.addScript(); }
   
   $: scripts = state?.scripts || [];
   $: active = state?.activeScriptId;

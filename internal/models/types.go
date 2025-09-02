@@ -43,7 +43,7 @@ type Session struct {
 }
 
 type SearchParams struct {
-    Query     string   `json:"name,omitempty"`
+    Query     string   `json:"query,omitempty"`
     Tags     []string `json:"tags,omitempty"`
     UserID   int      `json:"user_id,omitempty"`
     Limit   int      `json:"limit,omitempty"`

@@ -10,7 +10,7 @@ import (
     "sync"
     "time"
     "github.com/gorilla/mux"
-
+    "strings"
     "go-server/internal/models"
     "go-server/internal/data"
 )
@@ -83,13 +83,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Check if user already exists
-    existingUser := data.GetRepository().GetUserByUsername(registration.Username)
-    if existingUser != nil {
-        http.Error(w, "Username already taken", http.StatusConflict)
-        return
-    }
-    
     // Create new user
     user := models.User{
         Username: registration.Username,
@@ -97,7 +90,12 @@ func Register(w http.ResponseWriter, r *http.Request) {
     }
     createdUser, err := data.GetRepository().CreateUser(user)
     if err != nil {
-        http.Error(w, "Failed to create user: "+err.Error(), http.StatusInternalServerError)
+        // Check if the error is due to a duplicate username
+        if strings.Contains(err.Error(), "username already exists") {
+            http.Error(w, "Username already taken", http.StatusConflict)
+        } else {
+            http.Error(w, "Failed to create user: "+err.Error(), http.StatusInternalServerError)
+        }
         return
     }
 
@@ -105,7 +103,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
     token := generateToken()
     session := models.Session{
         Token:  token,
-        UserID: user.ID,
+        UserID: createdUser.ID,
     }
 
     sessionsMu.Lock()
@@ -152,9 +150,6 @@ func Logout(w http.ResponseWriter, r *http.Request) {
         HttpOnly: true,
         MaxAge:   -1,
     })
-
-    // Redirect to homepage after logout
-    http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // AuthMiddleware checks if user is authenticated
@@ -256,9 +251,24 @@ func GetShaders(w http.ResponseWriter, r *http.Request) {
     params := models.SearchParams{
         Query:  query.Get("name"),
         Tags:   query["tags"],
-        UserID: parseUserID(query.Get("user_id")),
-        Limit:  parseLimit(query.Get("limit"), 50),
-        Offset: parseOffset(query.Get("offset"), 0),
+        UserID: func() int {
+            if userID, err := strconv.Atoi(query.Get("user_id")); err == nil {
+                return userID
+            }
+            return 0
+        }(),
+        Limit: func() int {
+            if limit, err := strconv.Atoi(query.Get("limit")); err == nil {
+                return limit
+            }
+            return 0
+        }(),
+        Offset: func() int {
+            if offset, err := strconv.Atoi(query.Get("offset")); err == nil {
+                return offset
+            }
+            return 0
+        }(),
     }
     
     shaders := repo.SearchShaders(params)

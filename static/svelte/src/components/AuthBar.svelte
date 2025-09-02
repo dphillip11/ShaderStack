@@ -1,5 +1,5 @@
 <script>
-  import { dataManager, user, logoutUser } from '../stores/dataManager.js';
+  import { user, logout } from '../stores/user.js';
   import LoginModal from './LoginModal.svelte';
   import { onMount } from 'svelte';
   
@@ -17,7 +17,7 @@
 <div class="auth-bar">
   {#if $user.is_authenticated}
     <span class="user"><i class="fas fa-user"></i> {$user.username}</span>
-    <button class="btn-small" on:click={logoutUser()} aria-label="Logout"><i class="fas fa-sign-out-alt"></i></button>
+    <button class="btn-small" on:click={logout} aria-label="Logout"><i class="fas fa-sign-out-alt"></i></button>
   {:else}
     <button class="btn-small primary" on:click={openLogin} aria-label="Login"><i class="fas fa-sign-in-alt"></i> Login</button>
   {/if}

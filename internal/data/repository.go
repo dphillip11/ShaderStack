@@ -320,6 +320,32 @@ func (r *Repository) GetUserByID(id int) *models.User {
 	return nil
 }
 
+func (r *Repository) CreateUser(user models.User) (*models.User, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.usersByUsername[user.Username]; exists {
+		return nil, fmt.Errorf("username already exists: %s", user.Username)
+	}
+
+	user.ID = r.nextUserID
+	r.nextUserID++
+
+	r.users[user.ID] = user
+	userCopy := user
+	r.usersByUsername[user.Username] = &userCopy
+
+	if err := r.saveUsers(); err != nil {
+		// Attempt to roll back
+		delete(r.users, user.ID)
+		delete(r.usersByUsername, user.Username)
+		r.nextUserID--
+		return nil, fmt.Errorf("failed to save users: %w", err)
+	}
+
+	return &user, nil
+}
+
 // Shader methods
 func (r *Repository) GetShaderByID(id int) *models.Shader {
 	r.mu.RLock()

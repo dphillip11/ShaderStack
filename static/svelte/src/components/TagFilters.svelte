@@ -1,5 +1,5 @@
 <script>
-  import { tags } from '../stores/dataManager.js';
+  import { tags } from '../stores/tags.js';
   import { filters, clearFilters } from '../stores/search.js';
   
   // Use the Set-based store for O(1) lookups and better reactivity

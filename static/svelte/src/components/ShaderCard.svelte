@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import {dataManager, user} from '../stores/dataManager.js';
+  import {user} from '../stores/user.js';
 
   export let shader;
   const dispatch = createEventDispatcher();

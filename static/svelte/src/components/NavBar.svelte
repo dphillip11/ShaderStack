@@ -1,5 +1,5 @@
 <script>
-    import { user } from '../stores/dataManager.js';
+    import { user } from '../stores/user.js';
     import { BrowsePage, EditorPage } from '../stores/page.js';
     import AuthBar from './AuthBar.svelte';
 
