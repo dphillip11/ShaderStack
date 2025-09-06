@@ -5,7 +5,7 @@
   import DeleteConfirmDialog from './DeleteConfirmDialog.svelte';
   import { onMount } from 'svelte';
   import { shaders } from '../stores/shaders.js';
-
+  
   let pageTitle = 'Browse Shaders';
   let showDeleteDialog = false;
   let shaderToDelete = null;

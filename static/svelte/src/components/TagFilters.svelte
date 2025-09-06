@@ -1,18 +1,20 @@
 <script>
-  import { tags } from '../stores/tags.js';
-  import { filters, clearFilters } from '../stores/search.js';
+  import { tags, LoadTags } from '../stores/tags.js';
+  import { filters, clearFilters, filterByTag } from '../stores/search.js';
   
   // Use the Set-based store for O(1) lookups and better reactivity
-  $: isActive = (tag) => $tags.has(tag);
+  $: isActive = (tag) => $filters.tags.includes(tag);
   $: selectedCount = $filters.tags.length;
+  LoadTags();
+
 </script>
 
 <div class="tag-filters" aria-label="Tag filters">
-  {#each tags as t}
+  {#each $tags as t}
     <button type="button"
-            class="tag-filter {isActive(t) ? 'active' : ''}"
-            aria-pressed={isActive(t)}
-            on:click={() => toggleTag(t)}>{t}</button>
+            class="tag-filter {isActive(t.name) ? 'active' : ''}"
+            aria-pressed={isActive(t.name)}
+            on:click={() => filterByTag(t.name)}>{t.name}</button>
   {/each}
   {#if selectedCount > 0}
     <button type="button" class="clear-all" on:click={clearFilters}>Clear Tags</button>

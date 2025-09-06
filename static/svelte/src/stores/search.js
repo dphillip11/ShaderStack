@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 
 export const filters = writable({
     query: '',
@@ -19,11 +19,13 @@ export function clearFilters() {
 }
 
 export function setQuery(query) {
-    filters.update(f => ({ ...f, query}));
+  filters.update(f => ({ ...f, query }));
+  console.log("Filters updated:", get(filters));
 }
 
 export function filterByUserId(user_id) {
     filters.update(f => ({ ...f, user_id }));
+    console.log("Filters updated:", get(filters));
 }
 
 export function removeUserIdFilter() {
@@ -42,6 +44,14 @@ export function removeTagFilter(tag) {
         const tags = f.tags.filter(t => t !== tag);
         return { ...f, tags };
     });
+}
+
+export function toggleTagFilter(tag) {
+  if (tag in filters.tags) {
+    removeTagFilter(tag);
+  } else {
+    filterByTag(tag);
+  }
 }
 
 // Pagination helpers

@@ -1,9 +1,9 @@
 <script>
     import { user } from '../stores/user.js';
-    import { BrowsePage, EditorPage } from '../stores/page.js';
+    import { BrowsePage, EditorPage, MyShadersPage } from '../stores/page.js';
     import AuthBar from './AuthBar.svelte';
 
-  $: authenticated = $user.isAuthenticated;
+  $: authenticated = $user.is_authenticated;
   $: username = $user.username;
 </script>
 

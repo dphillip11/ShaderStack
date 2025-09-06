@@ -1,6 +1,6 @@
 <script>
   import BrowsePage from './components/BrowsePage.svelte';
-  //import EditorPage from './components/EditorPage.svelte';
+  import EditorPage from './components/EditorPage.svelte';
   import { pageState } from './stores/page.js';
   import NavBar from './components/NavBar.svelte';
 </script>

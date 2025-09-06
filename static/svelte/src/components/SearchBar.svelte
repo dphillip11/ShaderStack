@@ -19,9 +19,10 @@
     aria-label="Search term" 
   />
   <button type="submit">Search</button>
-  {#if filters.query}
+  {#if $filters.query}
     <button type="button" on:click={clearFilters} aria-label="Clear search">×</button>
   {/if}
+
 </form>
 
 <style>

@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import {user} from '../stores/user.js';
+  import {EditorPage} from '../stores/page.js';
 
   export let shader;
   const dispatch = createEventDispatcher();
@@ -22,6 +23,10 @@
     event.stopPropagation();
     dataManager.deleteShader(id);
   }
+
+  function viewShader(){
+    EditorPage(id);
+  }
 </script>
 
 <div class="shader-card" data-shader-id={id}>
@@ -39,7 +44,9 @@
     </div>
   {/if}
   <div class="shader-actions">
-    <a href="/{id}" class="btn-secondary"><i class="fas fa-eye"></i> View</a>
+      <button class="btn-secondary" on:click={viewShader} title="Delete shader">
+        <i class="fas fa-eye"></i> View
+      </button>
     {#if isOwner}
       <button class="btn-delete" on:click={handleDelete} title="Delete shader">
         <i class="fas fa-trash"></i> Delete

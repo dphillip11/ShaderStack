@@ -16,9 +16,10 @@ async function loadShadersLocal(){
 }
 
 async function loadShadersRemote(){
-  const params = new URLSearchParams(filters);
+  const params = new URLSearchParams(get(filters));
   const queryString = params.toString();
   const url = `/api/shaders${queryString ? '?' + queryString : ''}`;
+  console.log("Fetching shaders from:", url);
   shaders.set(await apiGet(url));
 }
 
@@ -68,6 +69,7 @@ async function deleteShaderRemote(shaderID){
 }
 
 export function LoadShaders() {
+  console.log("Loading shaders...", get(isOffline));
   if (get(isOffline)) {
     loadShadersLocal();
   } else {
@@ -75,7 +77,7 @@ export function LoadShaders() {
   }
 }
 
-export function UpdateShader() {
+export function UpdateShader(shader) {
   if (get(isOffline)) {
     return updateShaderLocal(shader);
   } else {
@@ -96,10 +98,15 @@ let searchTimeout;
 
 // dont bother filtering if offline
 filters.subscribe($filters => {
+  console.log("Filters updated:", $filters);
   if (get(isOffline)){ return; }
   // Debounce API calls to avoid too many requests during typing
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
     LoadShaders();
   }, 300); // 300ms debounce
+});
+
+isOffline.subscribe($isOffline => {
+  LoadShaders();
 });

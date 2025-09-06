@@ -25,12 +25,12 @@ type Repository struct {
 	users   map[int]models.User
 	shaders map[int]models.Shader
 	tags    map[int]models.Tag
-	
+
 	// Indexes for efficient querying
 	usersByUsername map[string]*models.User
-	shadersByUser   map[int][]int // userID -> []shaderID
+	shadersByUser   map[int][]int    // userID -> []shaderID
 	shadersByTag    map[string][]int // tagName -> []shaderID
-	
+
 	// Auto-increment counters
 	nextUserID   int
 	nextShaderID int
@@ -62,25 +62,25 @@ func GetRepository() *Repository {
 // loadData loads all data from JSON files and builds indexes
 func (r *Repository) loadData() {
 	r.ensureDataDir()
-	
+
 	// Load users
 	if err := r.loadUsers(); err != nil {
 		fmt.Printf("Warning: Could not load users: %v\n", err)
 		r.createDefaultUsers()
 	}
-	
+
 	// Load tags
 	if err := r.loadTags(); err != nil {
 		fmt.Printf("Warning: Could not load tags: %v\n", err)
 		r.createDefaultTags()
 	}
-	
+
 	// Load shaders
 	if err := r.loadShaders(); err != nil {
 		fmt.Printf("Warning: Could not load shaders: %v\n", err)
 		r.createDefaultShaders()
 	}
-	
+
 	r.buildIndexes()
 }
 
@@ -98,19 +98,19 @@ func (r *Repository) loadUsers() error {
 	if err != nil {
 		return err
 	}
-	
+
 	var users []models.User
 	if err := json.Unmarshal(data, &users); err != nil {
 		return err
 	}
-	
+
 	for _, user := range users {
 		r.users[user.ID] = user
 		if user.ID >= r.nextUserID {
 			r.nextUserID = user.ID + 1
 		}
 	}
-	
+
 	return nil
 }
 
@@ -119,12 +119,12 @@ func (r *Repository) saveUsers() error {
 	for _, user := range r.users {
 		users = append(users, user)
 	}
-	
+
 	data, err := json.MarshalIndent(users, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	path := filepath.Join(dataDir, usersFile)
 	return ioutil.WriteFile(path, data, 0644)
 }
@@ -135,7 +135,7 @@ func (r *Repository) createDefaultUsers() {
 		{ID: 2, Username: "user", Password: "userpass"},
 		{ID: 3, Username: "demo", Password: "demo123"},
 	}
-	
+
 	for _, user := range defaultUsers {
 		r.users[user.ID] = user
 	}
@@ -150,19 +150,19 @@ func (r *Repository) loadTags() error {
 	if err != nil {
 		return err
 	}
-	
+
 	var tags []models.Tag
 	if err := json.Unmarshal(data, &tags); err != nil {
 		return err
 	}
-	
+
 	for _, tag := range tags {
 		r.tags[tag.ID] = tag
 		if tag.ID >= r.nextTagID {
 			r.nextTagID = tag.ID + 1
 		}
 	}
-	
+
 	return nil
 }
 
@@ -171,12 +171,12 @@ func (r *Repository) saveTags() error {
 	for _, tag := range r.tags {
 		tags = append(tags, tag)
 	}
-	
+
 	data, err := json.MarshalIndent(tags, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	path := filepath.Join(dataDir, tagsFile)
 	return ioutil.WriteFile(path, data, 0644)
 }
@@ -192,7 +192,7 @@ func (r *Repository) createDefaultTags() {
 		{ID: 7, Name: "lighting"},
 		{ID: 8, Name: "post-processing"},
 	}
-	
+
 	for _, tag := range defaultTags {
 		r.tags[tag.ID] = tag
 	}
@@ -207,19 +207,19 @@ func (r *Repository) loadShaders() error {
 	if err != nil {
 		return err
 	}
-	
+
 	var shaders []models.Shader
 	if err := json.Unmarshal(data, &shaders); err != nil {
 		return err
 	}
-	
+
 	for _, shader := range shaders {
 		r.shaders[shader.ID] = shader
 		if shader.ID >= r.nextShaderID {
 			r.nextShaderID = shader.ID + 1
 		}
 	}
-	
+
 	return nil
 }
 
@@ -228,12 +228,12 @@ func (r *Repository) saveShaders() error {
 	for _, shader := range r.shaders {
 		shaders = append(shaders, shader)
 	}
-	
+
 	data, err := json.MarshalIndent(shaders, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	path := filepath.Join(dataDir, shadersFile)
 	return ioutil.WriteFile(path, data, 0644)
 }
@@ -268,7 +268,7 @@ func (r *Repository) createDefaultShaders() {
 			Tags: []models.Tag{{ID: 1, Name: "fragment"}, {ID: 5, Name: "animation"}},
 		},
 	}
-	
+
 	for _, shader := range defaultShaders {
 		r.shaders[shader.ID] = shader
 	}
@@ -282,18 +282,18 @@ func (r *Repository) buildIndexes() {
 	r.usersByUsername = make(map[string]*models.User)
 	r.shadersByUser = make(map[int][]int)
 	r.shadersByTag = make(map[string][]int)
-	
+
 	// Build user indexes
 	for _, user := range r.users {
 		userCopy := user
 		r.usersByUsername[user.Username] = &userCopy
 	}
-	
+
 	// Build shader indexes
 	for _, shader := range r.shaders {
 		// Index by user
 		r.shadersByUser[shader.UserID] = append(r.shadersByUser[shader.UserID], shader.ID)
-		
+
 		// Index by tags
 		for _, tag := range shader.Tags {
 			tagName := strings.ToLower(tag.Name)
@@ -359,13 +359,13 @@ func (r *Repository) GetShaderByID(id int) *models.Shader {
 // Helper method to process tags and ensure they have proper IDs (lock-free for internal use)
 func (r *Repository) processTags(tags []models.Tag) ([]models.Tag, error) {
 	var processedTags []models.Tag
-	
+
 	for _, tag := range tags {
 		tagName := strings.TrimSpace(tag.Name)
 		if tagName == "" {
 			continue // Skip empty tag names
 		}
-		
+
 		// Check if tag already exists (lock-free version)
 		existingTag := r.getTagByNameLockFree(tagName)
 		if existingTag != nil {
@@ -380,7 +380,7 @@ func (r *Repository) processTags(tags []models.Tag) ([]models.Tag, error) {
 			processedTags = append(processedTags, *newTag)
 		}
 	}
-	
+
 	return processedTags, nil
 }
 
@@ -402,15 +402,15 @@ func (r *Repository) createTagLockFree(name string) (*models.Tag, error) {
 			return &tag, nil
 		}
 	}
-	
+
 	tag := models.Tag{
 		ID:   r.nextTagID,
 		Name: name,
 	}
 	r.nextTagID++
-	
+
 	r.tags[tag.ID] = tag
-	
+
 	// Note: We don't save tags here as that would be done by the calling method
 	return &tag, nil
 }
@@ -418,26 +418,26 @@ func (r *Repository) createTagLockFree(name string) (*models.Tag, error) {
 func (r *Repository) CreateShader(shader models.Shader) (*models.Shader, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	// Process tags to ensure they have proper IDs
 	processedTags, err := r.processTags(shader.Tags)
 	if err != nil {
 		return nil, err
 	}
 	shader.Tags = processedTags
-	
+
 	shader.ID = r.nextShaderID
 	r.nextShaderID++
-	
+
 	r.shaders[shader.ID] = shader
-	
+
 	// Update indexes
 	r.shadersByUser[shader.UserID] = append(r.shadersByUser[shader.UserID], shader.ID)
 	for _, tag := range shader.Tags {
 		tagName := strings.ToLower(tag.Name)
 		r.shadersByTag[tagName] = append(r.shadersByTag[tagName], shader.ID)
 	}
-	
+
 	// Save both shaders and tags since we may have created new tags
 	if err := r.saveShaders(); err != nil {
 		return nil, err
@@ -445,31 +445,31 @@ func (r *Repository) CreateShader(shader models.Shader) (*models.Shader, error) 
 	if err := r.saveTags(); err != nil {
 		return nil, err
 	}
-	
+
 	return &shader, nil
 }
 
 func (r *Repository) UpdateShader(id int, shader models.Shader) (*models.Shader, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if _, exists := r.shaders[id]; !exists {
 		return nil, fmt.Errorf("shader not found")
 	}
-	
+
 	// Process tags to ensure they have proper IDs
 	processedTags, err := r.processTags(shader.Tags)
 	if err != nil {
 		return nil, err
 	}
 	shader.Tags = processedTags
-	
+
 	shader.ID = id
 	r.shaders[id] = shader
-	
+
 	// Rebuild indexes (could be optimized)
 	r.buildIndexes()
-	
+
 	// Save both shaders and tags since we may have created new tags
 	if err := r.saveShaders(); err != nil {
 		return nil, err
@@ -477,153 +477,150 @@ func (r *Repository) UpdateShader(id int, shader models.Shader) (*models.Shader,
 	if err := r.saveTags(); err != nil {
 		return nil, err
 	}
-	
+
 	return &shader, nil
 }
 
 func (r *Repository) DeleteShader(id int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if _, exists := r.shaders[id]; !exists {
 		return fmt.Errorf("shader not found")
 	}
-	
+
 	delete(r.shaders, id)
-	
+
 	// Rebuild indexes
 	r.buildIndexes()
-	
+
 	return r.saveShaders()
 }
 
 // SearchShaders performs efficient searching based on parameters
 func (r *Repository) SearchShaders(params models.SearchParams) []models.Shader {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-    
-    var candidateIDs []int
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-    // Start with all shaders if no specific filters
-    if params.UserID == 0 && len(params.Tags) == 0 && params.Query == "" {
-        for id := range r.shaders {
-            candidateIDs = append(candidateIDs, id)
-        }
-    } else if params.Query != "" {
-        // Query is inclusive - search across shader names, usernames, and tag names
-        queryLower := strings.ToLower(params.Query)
-        candidateMap := make(map[int]bool)
-        
-        // Search shader names
-        for id, shader := range r.shaders {
-            if strings.Contains(strings.ToLower(shader.Name), queryLower) {
-                candidateMap[id] = true
-            }
-        }
-        
-        // Search usernames
-        for _, user := range r.users {
-            if strings.Contains(strings.ToLower(user.Username), queryLower) {
-                // Add all shaders by this user
-                for _, shaderID := range r.shadersByUser[user.ID] {
-                    candidateMap[shaderID] = true
-                }
-            }
-        }
-        
-        // Search tag names
-        for _, tag := range r.tags {
-            if strings.Contains(strings.ToLower(tag.Name), queryLower) {
-                // Add all shaders with this tag
-                for _, shaderID := range r.shadersByTag[strings.ToLower(tag.Name)] {
-                    candidateMap[shaderID] = true
-                }
-            }
-        }
-        
-        // Convert map to slice
-        for id := range candidateMap {
-            candidateIDs = append(candidateIDs, id)
-        }
-    } else {
-        // No query, start with all shaders for other filters
-        for id := range r.shaders {
-            candidateIDs = append(candidateIDs, id)
-        }
-    }
-    
-    // Filter by user ID (exact match)
-    if params.UserID != 0 {
-        candidateIDs = r.intersectIDs(candidateIDs, r.shadersByUser[params.UserID])
-    }
-    
-    // Filter by tags (intersection - shader must have ALL specified tags)
-    for _, tagName := range params.Tags {
-        tagName = strings.ToLower(tagName)
-        candidateIDs = r.intersectIDs(candidateIDs, r.shadersByTag[tagName])
-    }
-    
-    // Convert IDs to shaders with early exit for pagination
-    var results []models.Shader
-    skipped := 0
-    collected := 0
-    
-    // Calculate how many we need to collect
-    limit := params.Limit
-    if limit <= 0 {
-        limit = len(candidateIDs) // No limit means collect all
-    }
-    
-    // Iterate through candidate IDs (no sorting for efficiency)
-    for _, id := range candidateIDs {
-        shader := r.shaders[id]
-        
-        // Skip records for pagination offset
-        if skipped < params.Offset {
-            skipped++
-            continue
-        }
-        
-        // Populate author field by looking up the user
-        if user := r.GetUserByID(shader.UserID); user != nil {
-            shader.Author = user.Username
-        } else {
-            shader.Author = "Unknown"
-        }
-        
-        results = append(results, shader)
-        collected++
-        
-        // Early exit when we have enough results
-        if collected >= limit {
-            break
-        }
-    }
-    
-    return results
+	var candidateIDs []int
+
+	// Start with all shaders if no specific filters
+	if params.UserID == 0 && len(params.Tags) == 0 && params.Query == "" {
+		for id := range r.shaders {
+			candidateIDs = append(candidateIDs, id)
+		}
+	} else if params.Query != "" {
+		// Query is inclusive - search across shader names, usernames, and tag names
+		queryLower := strings.ToLower(params.Query)
+		candidateMap := make(map[int]bool)
+
+		// Search shader names
+		for id, shader := range r.shaders {
+			if strings.Contains(strings.ToLower(shader.Name), queryLower) {
+				candidateMap[id] = true
+			}
+		}
+
+		// Search usernames
+		for _, user := range r.users {
+			if strings.Contains(strings.ToLower(user.Username), queryLower) {
+				// Add all shaders by this user
+				for _, shaderID := range r.shadersByUser[user.ID] {
+					candidateMap[shaderID] = true
+				}
+			}
+		}
+
+		// Search tag names
+		for _, tag := range r.tags {
+			if strings.Contains(strings.ToLower(tag.Name), queryLower) {
+				// Add all shaders with this tag
+				for _, shaderID := range r.shadersByTag[strings.ToLower(tag.Name)] {
+					candidateMap[shaderID] = true
+				}
+			}
+		}
+
+		// Convert map to slice
+		for id := range candidateMap {
+			candidateIDs = append(candidateIDs, id)
+		}
+	} else {
+		// No query, start with all shaders for other filters
+		for id := range r.shaders {
+			candidateIDs = append(candidateIDs, id)
+		}
+	}
+
+	// Filter by user ID (exact match)
+	if params.UserID != 0 {
+		candidateIDs = r.intersectIDs(candidateIDs, r.shadersByUser[params.UserID])
+	}
+
+	// Filter by tags (intersection - shader must have ALL specified tags)
+	for _, tagName := range params.Tags {
+		tagName = strings.ToLower(tagName)
+		candidateIDs = r.intersectIDs(candidateIDs, r.shadersByTag[tagName])
+	}
+
+	// Convert IDs to shaders with early exit for pagination
+	var results []models.Shader
+	skipped := 0
+	collected := 0
+
+	// Calculate how many we need to collect
+	limit := params.Limit
+	if limit <= 0 {
+		limit = len(candidateIDs) // No limit means collect all
+	}
+
+	// Iterate through candidate IDs (no sorting for efficiency)
+	for _, id := range candidateIDs {
+		shader := r.shaders[id]
+
+		// Skip records for pagination offset
+		if skipped < params.Offset {
+			skipped++
+			continue
+		}
+
+		// Populate author field by looking up the user
+		if user := r.GetUserByID(shader.UserID); user != nil {
+			shader.Author = user.Username
+		} else {
+			shader.Author = "Unknown"
+		}
+
+		results = append(results, shader)
+		collected++
+
+		// Early exit when we have enough results
+		if collected >= limit {
+			break
+		}
+	}
+
+	return results
 }
 
 // Helper function to intersect two slices of IDs
 func (r *Repository) intersectIDs(a, b []int) []int {
-	if len(a) == 0 {
-		return b
+	if len(a) == 0 || len(b) == 0 {
+		return []int{}
 	}
-	if len(b) == 0 {
-		return a
-	}
-	
+
 	m := make(map[int]bool)
 	for _, id := range a {
 		m[id] = true
 	}
-	
+
 	var result []int
 	for _, id := range b {
 		if m[id] {
 			result = append(result, id)
 		}
 	}
-	
+
 	return result
 }
 
@@ -631,23 +628,23 @@ func (r *Repository) intersectIDs(a, b []int) []int {
 func (r *Repository) GetAllTags() []models.Tag {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	tags := make([]models.Tag, 0, len(r.tags))
 	for _, tag := range r.tags {
 		tags = append(tags, tag)
 	}
-	
+
 	sort.Slice(tags, func(i, j int) bool {
 		return tags[i].Name < tags[j].Name
 	})
-	
+
 	return tags
 }
 
 func (r *Repository) GetTagByName(name string) *models.Tag {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	for _, tag := range r.tags {
 		if strings.EqualFold(tag.Name, name) {
 			return &tag
@@ -659,25 +656,25 @@ func (r *Repository) GetTagByName(name string) *models.Tag {
 func (r *Repository) CreateTag(name string) (*models.Tag, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	// Check if tag already exists
 	for _, tag := range r.tags {
 		if strings.EqualFold(tag.Name, name) {
 			return &tag, nil
 		}
 	}
-	
+
 	tag := models.Tag{
 		ID:   r.nextTagID,
 		Name: name,
 	}
 	r.nextTagID++
-	
+
 	r.tags[tag.ID] = tag
-	
+
 	if err := r.saveTags(); err != nil {
 		return nil, err
 	}
-	
+
 	return &tag, nil
 }
