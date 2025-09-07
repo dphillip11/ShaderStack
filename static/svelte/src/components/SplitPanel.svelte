@@ -92,7 +92,6 @@
     cursor: col-resize;
     position: relative;
     display: flex;
-    margin: 10px 0;
     align-items: center;
     justify-content: center;
     transition: background-color 0.2s;

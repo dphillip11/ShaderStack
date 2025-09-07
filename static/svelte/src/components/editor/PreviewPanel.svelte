@@ -1,23 +1,25 @@
 <script>
-  import { editorState } from '../../stores/editor.js';
+  import { isRunning } from '../../stores/editor.js';
+  import { activeScript } from '../../stores/active_shader.js';
 </script>
 
 <div class="preview-panel">
   <div class="panel-header">
     <h3>Preview</h3>
     <div class="preview-info">
-      {#if $editorState.activeScriptId}
-        <span class="active-script">Script {$editorState.activeScriptId}</span>
+      {#if $activeScript}
+        <span class="active-script">Script {$activeScript.id}</span>
       {/if}
       <div class="preview-status">
-        {#if $editorState.running}Running…{/if}
+        {#if $isRunning}<button class="btn-danger" on:click={() => isRunning.set(false)}>Stop</button>{/if}
+        {#if !$isRunning}<button class="btn-primary" on:click={() => isRunning.set(true)}>Run</button>{/if}
       </div>
     </div>
   </div>
   <div class="preview-content">
     <div class="webgpu-canvas-container">
       <canvas id="webgpu-canvas" width="512" height="512" aria-label="WebGPU preview"></canvas>
-      {#if !$editorState.activeScriptId}
+      {#if !$activeScript}
         <div id="canvas-overlay">
           <div>No script selected</div>
         </div>

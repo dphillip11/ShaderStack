@@ -8,7 +8,7 @@
     {#if $activeShader && $activeShader.shader_scripts && $activeShader.shader_scripts.length > 1}
     {#each $activeShader?.shader_scripts as sc, index}
       <div class="tab-wrapper">
-        <button class="tab-btn {activeScriptIndex === index ? 'active':''}" on:click={() => activeScriptIndex.set(index)}>
+        <button class="tab-btn {$activeScriptIndex === index ? 'active':''}" on:click={() => activeScriptIndex.set(index)}>
           <span class="tab-content">
             Script {sc.id}
             <span class="buffer-indicator">{sc.buffer?.width || 512}×{sc.buffer?.height || 512}</span>
