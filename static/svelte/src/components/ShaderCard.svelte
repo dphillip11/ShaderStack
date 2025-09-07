@@ -31,7 +31,10 @@
 
 <div class="shader-card" data-shader-id={id}>
   <div class="shader-header">
-    <h3 class="shader-title"><a href="/{id}">{name}</a></h3>
+    <!-- svelte-ignore a11y-missing-attribute -->
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <h3 class="shader-title"><a on:click={viewShader}>{name}</a></h3>
     <div class="shader-meta">
       {#if author}<span class="author">by {author}</span>{/if}
       <span class="shader-id">#{id}</span>
