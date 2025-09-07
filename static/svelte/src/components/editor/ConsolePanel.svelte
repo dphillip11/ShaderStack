@@ -1,5 +1,5 @@
 <script>
-  import { ClearConsole, consoleMessages } from '../../stores/console.js';
+  import { ClearConsole, consoleMessages } from '../../stores/logging.js';
   import {get} from 'svelte/store';
 </script>
 

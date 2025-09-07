@@ -1,12 +1,15 @@
 <script>
   import SplitPanel from './SplitPanel.svelte';
+  import CodeEditor from './editor/CodeEditor.svelte';
   import ConsolePanel from './editor/ConsolePanel.svelte';
   import PreviewPanel from './editor/PreviewPanel.svelte';
+  import ScriptTabs from './editor/ScriptTabs.svelte';
 </script>
 
 <SplitPanel>
-  <div slot="left" style="height:200px; margin:10px; border: solid 1px; margin-right:none; padding: 10px;">
-      <h1>Left Content</h1>
+  <div slot="left">
+      <ScriptTabs/>
+      <CodeEditor/>
   </div>
   <div slot="right">
       <PreviewPanel/>

@@ -1,6 +1,7 @@
 import { writable, get } from "svelte/store";
 
 export const consoleMessages = writable([]);
+export const compileErrorsByScript = writable({});
 
 // Append console message (pure helper)
 export function AddConsoleMessage(text, type = 'info') {

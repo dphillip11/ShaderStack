@@ -1,9 +1,13 @@
 <script>
-  import { createEventDispatcher, onMount } from 'svelte';
-  import { editorState, updateScriptCode, addConsoleMessage } from '../../stores/editor.js';
-  export let script = null; // { id, code }
-  const dispatch = createEventDispatcher();
-  
+    import { writable, derived } from "svelte/store";
+  import { activeScript, injectedCode, activeScriptIndex } from "../../stores/active_shader";
+  import { compileErrorsByScript } from "../../stores/logging";
+
+  let showInjectedCode = false;
+  let textareaElement;
+  let localCode = derived(activeScript, $activeScript => $activeScript ? decodeCode($activeScript.code) : '');
+  let errors = [];
+
   // Function to decode JSON-encoded strings
   function decodeCode(rawCode) {
     if (!rawCode) return '';
@@ -23,65 +27,10 @@
     
     return rawCode;
   }
-  
-  let localCode = '';
-  let lastScriptId = null;
-  let injectedCode = '';
-  let showInjectedCode = false;
-  let errors = [];
-  let textareaElement;
-  
-  // Only update localCode when script changes, not during editing
-  $: if (script && script.id !== lastScriptId) {
-    localCode = decodeCode(script.code) || '';
-    lastScriptId = script.id;
-    errors = []; // Clear errors when switching scripts
-    updateInjectedCodePreview();
-  }
-
-  // Function to get the injected code preview
-  function updateInjectedCodePreview() {
-    if (!script) {
-      injectedCode = '';
-      return;
-    }
-
-    try {
-      // Get workspace reference to access the shader compiler
-      const workspace = window.__workspaceRef;
-      if (!workspace || !workspace.shaderCompiler) {
-        injectedCode = '// Workspace not initialized';
-        return;
-      }
-
-      // Get available buffers (simulate what the script engine does)
-      const availableBuffers = new Map();
-      if (workspace.scriptEngine && workspace.scriptEngine.scripts) {
-        for (const [scriptId, scriptData] of workspace.scriptEngine.scripts) {
-          if (scriptId !== script.id) {
-            availableBuffers.set(scriptId, scriptData.bufferSpec);
-          }
-        }
-      }
-
-      // Generate the injected code
-      injectedCode = workspace.shaderCompiler.injectBufferBindings(localCode, availableBuffers);
-    } catch (error) {
-      injectedCode = `// Error generating injected code: ${error.message}`;
-    }
-  }
-
-  // Update injected code when local code changes
-  $: if (localCode) {
-    updateInjectedCodePreview();
-  }
 
   // Listen for compilation errors from the store
-  $: if ($editorState.consoleMessages) {
-    const latestErrors = $editorState.consoleMessages
-      .filter(msg => msg.type === 'error' && msg.text.includes(`Script ${script?.id}`))
-      .slice(-5); // Keep only latest 5 errors
-    
+  $: if ($compileErrorsByScript && $activeScript) {
+    const latestErrors = $compileErrorsByScript[$activeScript.id] || [];
     errors = extractLineNumbers(latestErrors);
   }
 
@@ -101,7 +50,7 @@
 
   function highlightErrorLines() {
     if (!textareaElement || errors.length === 0) return;
-    
+
     // This is a basic implementation - in a real editor you'd want syntax highlighting
     const lines = localCode.split('\n');
     errors.forEach(error => {
@@ -112,20 +61,6 @@
     });
   }
 
-  let timeout;
-  function onInput() {
-    if (!script) return;
-    const { id } = script;
-    const code = localCode;
-    clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      updateScriptCode(id, code);
-      dispatch('updateCode', { id, code });
-      // Update injected code preview after a short delay
-      setTimeout(updateInjectedCodePreview, 100);
-    }, 250);
-  }
-
   function toggleInjectedCode() {
     showInjectedCode = !showInjectedCode;
     if (showInjectedCode) {
@@ -133,50 +68,24 @@
     }
   }
 
-  // Auto-compile on Ctrl+Enter
-  function handleKeyDown(event) {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-      event.preventDefault();
-      compileCurrentScript();
-    }
-  }
-
-  async function compileCurrentScript() {
-    if (!script) return;
-    
-    try {
-      const workspace = window.__workspaceRef;
-      if (workspace && workspace.compileActiveScript) {
-        await workspace.compileActiveScript();
-      }
-    } catch (error) {
-      addConsoleMessage(`Compilation failed: ${error.message}`, 'error');
-    }
-  }
-
-  onMount(() => {
-    highlightErrorLines();
-  });
-
   // Re-highlight when errors change
-  $: if (errors) {
+  $: if (errors.length > 0) {
     highlightErrorLines();
   }
 </script>
 
 <div class="code-editor-container">
-  {#if script}
+  {#if activeScript}
     <div class="code-section">
       <div class="section-header">
         <h4>Your Shader Code</h4>
         <div class="editor-hints">
-          <span class="hint">Ctrl+Enter to compile</span>
           {#if errors.length > 0}
             <span class="error-count">{errors.length} error{errors.length > 1 ? 's' : ''}</span>
           {/if}
         </div>
       </div>
-      
+
       {#if errors.length > 0}
         <div class="error-summary">
           {#each errors as error}
@@ -190,11 +99,9 @@
       
       <textarea 
         bind:this={textareaElement}
-        class="code-editor" 
+        class="code-editor"
         class:has-errors={errors.length > 0}
-        bind:value={localCode} 
-        on:input={onInput}
-        on:keydown={handleKeyDown}
+        bind:value={$activeScript.code} 
         spellcheck="false" 
         aria-label="WGSL code editor"
         placeholder="Enter your WGSL shader code here...
@@ -220,7 +127,7 @@
       
       {#if showInjectedCode}
         <div class="injected-code-container">
-          <pre class="injected-code">{injectedCode || '// No injected code available'}</pre>
+          <pre class="injected-code">{$injectedCode || '// No injected code available'}</pre>
         </div>
       {/if}
     </div>

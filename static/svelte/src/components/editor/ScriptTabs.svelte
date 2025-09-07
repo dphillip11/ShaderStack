@@ -1,92 +1,36 @@
 <script>
-  import { editorState, setActiveScript, updateScriptBuffer, deleteScript } from '../../stores/editor.js';
-  import { updatePreview } from '../../adapters/workspaceAdapter.js';
+  import { addNewScript, deleteScript, activeShader, activeScriptIndex, activeScript } from '../../stores/active_shader.js';
   import BufferControls from './BufferControls.svelte';
-  
-  let state;
-  const unsubscribe = editorState.subscribe(s => state = s);
-  
-  async function select(id) { 
-    setActiveScript(id);
-    // Compile and execute the script when switching tabs, then update preview
-    try {
-      const workspace = window.__workspaceRef;
-      if (workspace && workspace.scriptEngine) {
-        const script = state?.scripts?.find(s => s.id === id);
-        
-        if (script) {
-          // Check if script is already compiled
-          if (!workspace.scriptEngine.scripts.has(id)) {
-            // Compile the script first
-            await workspace.compileScript(id, script.code, script.buffer);
-          }
-          
-          // Execute the script to generate fresh output
-          await workspace.scriptEngine.executeScript(id);
-          
-          // Update preview
-          await updatePreview();
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to compile/execute script when switching tabs:', error);
-    }
-  }
-  
-  function add(){ dataManager.addScript(); }
-  
-  $: scripts = state?.scripts || [];
-  $: active = state?.activeScriptId;
-  $: activeScript = scripts.find(sc => sc.id === active);
-  
-  function handleBufferChange(event) {
-    if (activeScript) {
-      updateScriptBuffer(activeScript.id, event.detail);
-    }
-  }
-  
-  function deleteScriptHandler(scriptId, event) {
-    event.stopPropagation(); // Prevent tab selection when clicking X
-    
-    // Don't allow deleting the last script
-    if (scripts.length <= 1) {
-      return;
-    }
-    
-    deleteScript(scriptId);
-  }
-  
-  import { onDestroy } from 'svelte';
-  onDestroy(unsubscribe);
 </script>
 
 <div class="script-tabs-container">
   <div class="script-tabs">
-    {#each scripts as sc}
+    {#if $activeShader && $activeShader.shader_scripts && $activeShader.shader_scripts.length > 1}
+    {#each $activeShader?.shader_scripts as sc, index}
       <div class="tab-wrapper">
-        <button class="tab-btn {active===sc.id ? 'active':''}" on:click={() => select(sc.id)}>
+        <button class="tab-btn {activeScriptIndex === index ? 'active':''}" on:click={() => activeScriptIndex.set(index)}>
           <span class="tab-content">
             Script {sc.id}
             <span class="buffer-indicator">{sc.buffer?.width || 512}×{sc.buffer?.height || 512}</span>
           </span>
-          {#if scripts.length > 1}
+          {#if $activeShader.shader_scripts.length > 1}
             <button 
               class="tab-close" 
-              on:click={(e) => deleteScriptHandler(sc.id, e)}
+              on:click={(e) => deleteScript(index)}
               title="Delete script"
-              aria-label="Delete script {sc.id}"
+              aria-label="Delete script {index}"
             >×</button>
           {/if}
         </button>
       </div>
     {/each}
-    <button class="tab-btn add" on:click={add} title="Add script">+</button>
+    {/if}
+    <button class="tab-btn add" on:click={addNewScript} title="Add script">+</button>
   </div>
   
-  {#if activeScript}
+  {#if $activeScript}
     <BufferControls 
       buffer={activeScript.buffer || { format: 'rgba8unorm', width: 512, height: 512 }}
-      on:change={handleBufferChange}
     />
   {/if}
 </div>
