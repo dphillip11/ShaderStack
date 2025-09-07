@@ -4,7 +4,7 @@ import {writable, derived} from 'svelte/store';
 import { apiGet, apiPost } from '../utils/api.js';
 
 export const user = writable(NO_USER);
-export const isOffline = derived(user, $user => $user.is_authenticated);
+export const isOffline = derived(user, $user => $user.user_id === OFFLINE_USER.user_id);
 
 export function workOffline()
 {

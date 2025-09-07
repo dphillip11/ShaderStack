@@ -21,7 +21,7 @@
       </button>
       
       {#if authenticated}
-        <button class="nav-link" on:click={BrowsePage}>
+        <button class="nav-link" on:click={MyShadersPage}>
           <i class="fas fa-user"></i> My Shaders
         </button>
         <button class="nav-link" on:click={EditorPage}>

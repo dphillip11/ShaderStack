@@ -1,12 +1,15 @@
 <script>
   import SearchBar from './SearchBar.svelte';
-  import TagFilters from './TagFilters.svelte';
   import ShaderGrid from './ShaderGrid.svelte';
   import DeleteConfirmDialog from './DeleteConfirmDialog.svelte';
-  import { onMount } from 'svelte';
+  import Tags from './Tags.svelte';
   import { shaders } from '../stores/shaders.js';
-  
-  let pageTitle = 'Browse Shaders';
+  import { filters } from '../stores/search.js';
+  import {tags, LoadTags} from '../stores/tags.js';
+  import { user } from '../stores/user.js';
+  import { derived } from 'svelte/store';
+
+  let pageTitle = derived([filters, user], ([$filters, $user]) => $filters.user_id && $user.user_id && $user.user_id === $filters.user_id ? 'My Shaders' : 'Browse Shaders');
   let showDeleteDialog = false;
   let shaderToDelete = null;
   let isDeleting = false;
@@ -47,12 +50,15 @@
       isDeleting = false;
     }
   }
+
+  LoadTags();
+
 </script>
 
-<section class="browse-svelte" aria-label="{pageTitle}">
+<section class="browse-svelte" aria-label="{$pageTitle}">
   <div class="page-header">
-    <h1>{pageTitle}</h1>
-    {#if pageTitle === 'My Shaders'}
+    <h1>{$pageTitle}</h1>
+    {#if $pageTitle === 'My Shaders'}
       <p class="page-description">Your personal shader collection</p>
     {:else}
       <p class="page-description">Discover and explore community shaders</p>
@@ -60,7 +66,7 @@
   </div>
 
   <SearchBar />
-  <TagFilters />
+  <Tags bind:tags={$filters.tags} options={$tags.map(t => t.name)} edit={true} />
   
   {#if $shaders}
     <ShaderGrid list={$shaders} on:delete={handleShaderDelete} />

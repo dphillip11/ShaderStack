@@ -10,6 +10,14 @@ export const NO_USER = {
   user_id: null
 };
 
+export const DEFAULT_FILTERS = {
+  query: '',
+  tags: [],
+  user_id: null,
+  limit: 20,
+  offset: 0,
+}
+
 export const DEFAULT_VERTEX_SHADER = `
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {

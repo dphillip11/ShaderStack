@@ -98,7 +98,6 @@ let searchTimeout;
 
 // dont bother filtering if offline
 filters.subscribe($filters => {
-  console.log("Filters updated:", $filters);
   if (get(isOffline)){ return; }
   // Debounce API calls to avoid too many requests during typing
   clearTimeout(searchTimeout);
