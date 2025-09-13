@@ -58,7 +58,7 @@ async function updateShaderRemote(shader){
 }
 
 async function deleteShaderLocal(shaderID){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedShaders));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(get(shaders)));
 }
 
 async function deleteShaderRemote(shaderID){
@@ -82,7 +82,6 @@ export function UpdateShader(shader) {
   } else {
       updatedShaders.push(shader);
   }
-  debugger;
   shaders.set(updatedShaders);
 
   if (get(isOffline)) {
@@ -93,8 +92,8 @@ export function UpdateShader(shader) {
 }
 
 export function DeleteShader(shaderID) {
-  const shaders = get(shaders);
-  const updatedShaders = shaders.filter(shader => shader.id !== shaderID);
+  const existingShaders = get(shaders);
+  const updatedShaders = existingShaders.filter(shader => shader.id !== shaderID);
   shaders.set(updatedShaders);
 
   if (get(isOffline)) {

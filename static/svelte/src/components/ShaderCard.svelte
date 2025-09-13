@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import {user} from '../stores/user.js';
   import {EditorPage} from '../stores/page.js';
+  import {DeleteShader} from '../stores/shaders.js';
 
   export let shader;
   const dispatch = createEventDispatcher();
@@ -17,12 +18,6 @@
 
   // Check if current user owns this shader
   $: isOwner = $user.is_authenticated && $user.user_id === userId;
-
-  function handleDelete(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    dataManager.deleteShader(id);
-  }
 
   function viewShader(){
     EditorPage(shader);
@@ -51,7 +46,7 @@
         <i class="fas fa-eye"></i> View
       </button>
     {#if isOwner}
-      <button class="btn-delete" on:click={handleDelete} title="Delete shader">
+      <button class="btn-delete" on:click={() => DeleteShader(id)} title="Delete shader">
         <i class="fas fa-trash"></i> Delete
       </button>
     {/if}

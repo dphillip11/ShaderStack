@@ -1,83 +1,109 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { login } from '../stores/user.js';
+  import { login, register } from '../stores/user.js';
+
   const dispatch = createEventDispatcher();
+
+  export let show = false;
   let username = '';
   let password = '';
+  let confirmPassword = '';
   let loading = false;
   let error = '';
-  let show = false;
-  export function open(){ 
-    show = true; 
-    error=''; 
-    username=''; 
-    password=''; 
-    // Force a DOM update check
-    setTimeout(() => {
-      const modalEl = document.querySelector('.modal');
-      console.log('Modal DOM element found:', !!modalEl, modalEl);
-      if (modalEl) {
-        console.log('Modal computed styles:', window.getComputedStyle(modalEl).display, window.getComputedStyle(modalEl).zIndex);
+  let mode = 'login'; // 'login' | 'register'
+
+  export function open() {
+    show = true;
+    error = '';
+    username = '';
+    password = '';
+    confirmPassword = '';
+    mode = 'login';
+  }
+
+  function close() {
+    show = false;
+    dispatch('close');
+  }
+
+  async function submit() {
+    error = '';
+    if (!username || username.trim().length < 3) {
+      error = 'Username must be at least 3 characters';
+      return;
+    }
+    if (!password || password.length < 3) {
+      error = 'Password must be at least 3 characters';
+      return;
+    }
+    if (mode === 'register' && password !== confirmPassword) {
+      error = 'Passwords do not match';
+      return;
+    }
+
+    loading = true;
+    try {
+      if (mode === 'login') {
+        await login(username.trim(), password);
+      } else {
+        await register(username.trim(), password);
       }
-    }, 10);
-  }
-  function close(){ 
-    if(loading)return; 
-    console.log('LoginModal close() called');
-    show = false; 
-    dispatch('close'); 
-  }
-  async function submit(){
-    if(username.length<3||password.length<3) return;
-    loading=true; error='';
-    try { 
-      await login(username.trim(), password); 
-      
-      // Close modal immediately and wait for DOM update
-      show = false;
-      dispatch('close');
-      dispatch('loggedIn');
+      dispatch('success', { mode, username: username.trim() });
+      close();
+    } catch (e) {
+      error = e && e.message ? e.message : String(e);
+    } finally {
+      loading = false;
     }
-    catch(e){ 
-      error = e.message || 'Login failed'; 
-      loading=false;
-    }
-    loading=false;
   }
-  function onKey(e){ if(e.key==='Escape') close(); if(e.key==='Enter') submit(); }
 </script>
+
 {#if show}
-<div class="modal svelte-modal-overlay" on:keydown|self={onKey} role="dialog" aria-modal="true" aria-labelledby="modal-title">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2 id="modal-title"><i class="fas fa-sign-in-alt"></i> Login</h2>
-      <button type="button" class="modal-close" on:click={close} disabled={loading}>×</button>
+  <div class="svelte-modal-overlay" on:click={close} role="button" tabindex="0" on:keydown={(e) => e.key === 'Escape' && close()}>
+    <div class="modal-content" on:click|stopPropagation role="dialog" aria-modal="true" aria-label="Authentication">
+      <div class="modal-header" role="tablist" aria-label="Authentication tabs">
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <button type="button" class="tab-btn" class:active={mode === 'login'} on:click={() => { mode = 'login'; error = ''; }}>Login</button>
+          <button type="button" class="tab-btn" class:active={mode === 'register'} on:click={() => { mode = 'register'; error = ''; }}>Register</button>
+        </div>
+        <button class="modal-close" on:click={close} aria-label="Close">✕</button>
+      </div>
+
+      {#if error}
+        <div class="error-message">{error}</div>
+      {/if}
+
+      <div class="form-group">
+        <label for="login-username">Username</label>
+        <input id="login-username" type="text" bind:value={username} placeholder="username" />
+      </div>
+
+      <div class="form-group">
+        <label for="password-input">Password</label>
+        <input id="password-input" type="password" bind:value={password} placeholder="••••" minlength="3" autocomplete="current-password" disabled={loading} />
+      </div>
+
+      {#if mode === 'register'}
+        <div class="form-group">
+          <label for="login-confirm">Confirm password</label>
+          <input id="login-confirm" type="password" bind:value={confirmPassword} placeholder="confirm password" />
+        </div>
+      {/if}
+
+      <div class="form-actions">
+        <button class="btn-primary" on:click={submit} disabled={loading} aria-disabled={loading}>
+          {#if loading}Working...{:else}{mode === 'login' ? 'Login' : 'Register'}{/if}
+        </button>
+        <button class="btn-secondary" on:click={close} disabled={loading}>Cancel</button>
+      </div>
+
+      <p class="login-help"><small>Demo: demo / demo123</small></p>
     </div>
-    {#if error}<div class="error-message">{error}</div>{/if}
-    <div class="form-group">
-      <label for="username-input">Username</label>
-      <input id="username-input" bind:value={username} placeholder="demo" minlength="3" autocomplete="username" disabled={loading} />
-    </div>
-    <div class="form-group">
-      <label for="password-input">Password</label>
-      <input id="password-input" type="password" bind:value={password} placeholder="••••" minlength="3" autocomplete="current-password" disabled={loading} />
-    </div>
-    <div class="form-actions">
-      <button class="btn-primary" on:click={submit} disabled={loading || username.length<3 || password.length<3}>
-        {#if loading}
-          <i class="fas fa-spinner fa-spin"></i> Logging in...
-        {:else}
-          <i class="fas fa-sign-in-alt"></i> Login
-        {/if}
-      </button>
-      <button type="button" class="btn-secondary" on:click={() => { username='demo'; password='demo123'; submit(); }} disabled={loading}>Demo</button>
-    </div>
-    <p class="login-help"><small>Demo: demo / demo123</small></p>
   </div>
-</div>
 {/if}
+
 <style>
-  :global(.svelte-modal-overlay) { 
+  :global(.svelte-modal-overlay) {
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
@@ -96,24 +122,32 @@
     overflow-y: auto !important;
   }
 
-  .modal-content { 
-    margin: auto; /* reinforce centering when overlay is taller than content */
+  .modal-content {
+    margin: auto;
     max-width: 90vw;
     width: 340px;
-    background:#1e2530; color:#fff; padding:1.25rem 1.5rem; border-radius:10px;
-    display:flex; flex-direction:column; gap:.75rem; box-shadow:0 10px 30px rgba(0,0,0,.4);
+    background: #1e2530;
+    color: #fff;
+    padding: 1.25rem 1.5rem;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
   }
-  .modal-header { display:flex; justify-content:space-between; align-items:center; }
-  .modal-close { background:none; border:none; font-size:1.25rem; color:#ccc; cursor:pointer; }
-  .form-group { display:flex; flex-direction:column; gap:.35rem; }
-  .form-group input { padding:.55rem .7rem; border-radius:6px; border:1px solid #334; background:#243040; color:#fff; }
-  .form-group input:focus { outline:2px solid #3b82f6; }
-  .form-actions { display:flex; gap:.5rem; }
-  .btn-primary, .btn-secondary { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:.4rem; padding:.6rem .8rem; font-size:.9rem; font-weight:600; border-radius:6px; cursor:pointer; border:none; }
-  .btn-primary { background:#2563eb; color:#fff; }
-  .btn-primary:disabled { opacity:.6; cursor:not-allowed; }
-  .btn-secondary { background:#374151; color:#e5e7eb; }
-  .btn-secondary:hover { background:#4b5563; }
-  .error-message { background:#7f1d1d; color:#fecaca; padding:.5rem .6rem; border-radius:6px; font-size:.8rem; }
-  .login-help { margin:0; text-align:center; opacity:.6; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; }
+  .modal-close { background: none; border: none; font-size: 1.25rem; color: #ccc; cursor: pointer; }
+  .form-group { display: flex; flex-direction: column; gap: .35rem; }
+  .form-group input { padding: .55rem .7rem; border-radius: 6px; border: 1px solid #334; background: #243040; color: #fff; }
+  .form-group input:focus { outline: 2px solid #3b82f6; }
+  .form-actions { display: flex; gap: .5rem; }
+  .btn-primary, .btn-secondary { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .6rem .8rem; font-size: .9rem; font-weight: 600; border-radius: 6px; cursor: pointer; border: none; }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+  .btn-secondary { background: #374151; color: #e5e7eb; }
+  .btn-secondary:hover { background: #4b5563; }
+  .error-message { background: #7f1d1d; color: #fecaca; padding: .5rem .6rem; border-radius: 6px; font-size: .8rem; }
+  .login-help { margin: 0; text-align: center; opacity: .6; }
+  .tab-btn { background: transparent; border: none; color: #cbd5e1; padding: .35rem .6rem; border-radius: 6px; cursor: pointer; }
+  .tab-btn.active { background: rgba(255,255,255,0.04); color: #fff; }
 </style>
