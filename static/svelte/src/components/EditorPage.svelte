@@ -4,12 +4,13 @@
   import ConsolePanel from './editor/ConsolePanel.svelte';
   import PreviewPanel from './editor/PreviewPanel.svelte';
   import ScriptTabs from './editor/ScriptTabs.svelte';
-  import {activeShader} from '../stores/active_shader.js';
+  import {activeShader, AddTag, RemoveTag, SaveActiveShader} from '../stores/active_shader.js';
   import Tags from './Tags.svelte';
 
   let isEditingName = false;
   
 </script>
+{#if $activeShader}
 
 <div class="shader-info">
   {#if isEditingName}
@@ -31,8 +32,11 @@
       </button></h2>
     </div>
   {/if}
-  <Tags tags={$activeShader.tags} create={true} edit={true} field={"name"} tagFactory={tag => ({name:tag, id:null})} />
+  <Tags create=true edit=true tags={$activeShader.tags?.map(t => t.name) || []} on:add={({ detail }) => AddTag(detail.tag)} on:remove={({ detail }) => RemoveTag(detail.tag)} />
+  <button class="btn-confirm btn" id="save-button" on:click={SaveActiveShader}>Save</button>
 </div>
+
+{/if}
 
 <SplitPanel>
   <div slot="left">
@@ -65,8 +69,36 @@
   }
 
   .shader-info {
+    position: relative;
     padding: 1rem 1.5rem;
     border-bottom: 1px solid #e2e8f0;
     background-color: #f8fafc;
   }
+
+  #save-button {
+    background-color: #3182ce;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 1.5rem; /* Add some margin for spacing */
+  }
+
+  #save-button:hover {
+    background-color: #2c5aa0;
+  }
+
+  #save-button:active {
+    background-color: #2a4a8b;
+    transform: translateY(1px);
+  }
+
+
 </style>

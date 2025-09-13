@@ -1,28 +1,31 @@
 <script>
+    import { createEventDispatcher } from 'svelte';
+
+    const dispatch = createEventDispatcher();
+
     // props include current tags, options, edit, create
     export let tags = [];
     export let options = [];
     export let edit = false;
     export let create = false;
-    export let tagFactory = null;
-    export let field = "";
-
-    // Component methods to modify the tags
-    function addTag(tag) {
-        let newTag = tagFactory ? tagFactory(tag) : tag;
-        if (tags.includes(newTag)) return;
-        tags = [...tags, newTag];
-    }
     
-    function removeTag(tag) {
-        tags = tags.filter(t => t !== tag);
+    function onAdd(val) {
+        const v = val.trim(); if (!v) return;
+        tags = [...tags, v];
+        dispatch('add', { tag: v });
+    }
+
+    function onRemove(val) {
+        tags = tags.filter(t => t !== val);
+        dispatch('remove', { tag: val });
     }
 
     function toggleTag(tag) {
+        console.log('toggleTag', tag);
         if (tags.includes(tag)) {
-            removeTag(tag);
+            onRemove(tag);
         } else {
-            addTag(tag);
+            onAdd(tag);
         }
     }
 </script>
@@ -32,18 +35,18 @@
     <input
       class="tag-input"
       placeholder="Add tag"
-      on:keydown={(e) => e.key === 'Enter' && addTag(e.target.value) && (e.target.value = '')}
+      on:keydown={(e) => e.key === 'Enter' && onAdd(e.target.value) && (e.target.value = '')}
     />
   {/if}
 
   {#each tags as tag, i}
     {#if !options.includes(tag)}
-        <button class="tag {tags.includes(tag) ? 'active' : ''}" on:click={() =>{if (edit){toggleTag(tag)}}}>{field ? tag[field] : tag}</button>
+        <button class="tag {tags.includes(tag) ? 'active' : ''}" on:click={() =>{if (edit){toggleTag(tag)}}}>{tag}</button>
     {/if}
   {/each}
 
   {#each options as tag}
-    <button class="tag {tags.includes(tag) ? 'active' : ''}" on:click={() =>{if (edit){toggleTag(tag)}}}>{field ? tag[field] : tag}</button>
+    <button class="tag {tags.includes(tag) ? 'active' : ''}" on:click={() =>{if (edit){toggleTag(tag)}}}>{tag}</button>
   {/each}
 </div>
 

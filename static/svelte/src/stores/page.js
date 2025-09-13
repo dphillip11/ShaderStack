@@ -1,7 +1,7 @@
 import { writable, get} from 'svelte/store';
 import {filters, clearFilters} from '../stores/search.js';
 import {user} from '../stores/user.js';
-import {activeShaderID} from '../stores/active_shader.js';
+import {NewShader, activeShader} from '../stores/active_shader.js';
 import { DEFAULT_FILTERS } from '../constants.js';
 
 export const pageState = writable({
@@ -13,8 +13,13 @@ export function BrowsePage() {
   clearFilters();
 }
 
-export function EditorPage(shaderId) {
-  activeShaderID.set(shaderId);
+export function EditorPage(shader) {
+  activeShader.set(shader);
+  pageState.set({ page: 'editor' });
+}
+
+export function NewShaderPage() {
+  activeShader.set(NewShader());
   pageState.set({ page: 'editor' });
 }
 

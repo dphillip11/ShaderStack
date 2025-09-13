@@ -25,7 +25,7 @@
   }
 
   function viewShader(){
-    EditorPage(id);
+    EditorPage(shader);
   }
 </script>
 

@@ -1,9 +1,9 @@
+import {user} from "./user.js";
 import { writable, derived, get } from "svelte/store";
-import { shaders } from "../stores/shaders";
+import { shaders, UpdateShader } from "../stores/shaders";
 import {DEFAULT_SCRIPT} from "../constants.js";
 
-export const activeShaderID = writable(null);
-export const activeShader = derived(activeShaderID, id => id ? get(shaders).find(s => s.id === id) : null);
+export const activeShader = writable(null);
 export const activeScriptIndex = writable(0);
 export const injectedCode = writable("");
 export const activeScript = derived(
@@ -15,6 +15,39 @@ export const activeScript = derived(
         return shader.shader_scripts[scriptIndex];
     }
 );
+
+export function NewShader(){
+    return {
+        id: null,
+        name: 'New Shader',
+        description: '',
+        tags: [{ name: 'Shader', id: null }],
+        shader_scripts: [DEFAULT_SCRIPT],
+        user_id: get(user)?.user_id,
+    };
+}
+
+export function SaveActiveShader() {
+    const shader = get(activeShader);
+    if (!shader) return;
+    UpdateShader(shader);
+}
+
+export function AddTag(tagString) {
+    debugger;
+    const currentShader = get(activeShader);
+    if (currentShader.tags.map(t => t.name).includes(tagString)) return;
+    currentShader.tags.push({ name: tagString, id: null });
+    activeShader.set(currentShader);
+}
+
+export function RemoveTag(tagString) {
+    debugger;
+    const currentShader = get(activeShader);
+    if (!currentShader.tags.map(t => t.name).includes(tagString)) return;
+    currentShader.tags = currentShader.tags.filter(t => t.name !== tagString);
+    activeShader.set(currentShader);
+}
 
 export function addNewScript() {
     console.log("Adding new script", get(activeShader));

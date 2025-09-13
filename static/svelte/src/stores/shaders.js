@@ -10,6 +10,7 @@ const STORAGE_KEY = 'webgpu_shaders';
 async function loadShadersLocal(){
   // Load shaders from local storage
   const storedShaders = localStorage.getItem(STORAGE_KEY);
+  debugger;
   if (storedShaders) {
     shaders.set(JSON.parse(storedShaders));
   }
@@ -25,17 +26,18 @@ async function loadShadersRemote(){
 
 function getNextIdLocal(){
   // Get the next available shader ID
-  const shaders = get(shaders);
-  if (shaders.length === 0) {
+  const existingShaders = get(shaders);
+  if (existingShaders.length === 0) {
     return 1;
   }
-  const maxId = Math.max(...shaders.map(shader => shader.shaderID));
+  const maxId = Math.max(...existingShaders.map(shader => shader.id));
   return maxId + 1;
 }
 
 async function updateShaderLocal(shader){
   if (!shader.id)
   {
+    debugger;
     const id = getNextIdLocal();
     shader.id = id;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(get(shaders)));
@@ -45,6 +47,7 @@ async function updateShaderLocal(shader){
 async function updateShaderRemote(shader){
   if (!shader.id)
   {
+    debugger;
     const response = await apiPost(`/api/shaders`, shader);
     shader.id = response.id;
   }
@@ -55,17 +58,11 @@ async function updateShaderRemote(shader){
 }
 
 async function deleteShaderLocal(shaderID){
-  const shaders = get(shaders);
-  const updatedShaders = shaders.filter(shader => shader.id !== shaderID);
-  shaders.set(updatedShaders);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedShaders));
 }
 
 async function deleteShaderRemote(shaderID){
   await apiDelete(`/api/shaders/${shaderID}`);
-  const shaders = get(shaders);
-  const updatedShaders = shaders.filter(shader => shader.id !== shaderID);
-  shaders.set(updatedShaders);
 }
 
 export function LoadShaders() {
@@ -78,14 +75,28 @@ export function LoadShaders() {
 }
 
 export function UpdateShader(shader) {
-  if (get(isOffline)) {
-    return updateShaderLocal(shader);
+  var updatedShaders = get(shaders);
+  const existingShader = updatedShaders.find(s => s.id === shader.id);
+  if (existingShader) {
+      Object.assign(existingShader, shader);
   } else {
-    return updateShaderRemote(shader);
+      updatedShaders.push(shader);
+  }
+  debugger;
+  shaders.set(updatedShaders);
+
+  if (get(isOffline)) {
+    updateShaderLocal(shader);
+  } else {
+    updateShaderRemote(shader);
   }
 }
 
 export function DeleteShader(shaderID) {
+  const shaders = get(shaders);
+  const updatedShaders = shaders.filter(shader => shader.id !== shaderID);
+  shaders.set(updatedShaders);
+
   if (get(isOffline)) {
     return deleteShaderLocal(shaderID);
   } else {

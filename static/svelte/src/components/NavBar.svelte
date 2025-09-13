@@ -1,6 +1,6 @@
 <script>
     import { user } from '../stores/user.js';
-    import { BrowsePage, EditorPage, MyShadersPage } from '../stores/page.js';
+    import { BrowsePage, NewShaderPage, MyShadersPage } from '../stores/page.js';
     import AuthBar from './AuthBar.svelte';
 
   $: authenticated = $user.is_authenticated;
@@ -24,7 +24,7 @@
         <button class="nav-link" on:click={MyShadersPage}>
           <i class="fas fa-user"></i> My Shaders
         </button>
-        <button class="nav-link" on:click={EditorPage}>
+        <button class="nav-link" on:click={NewShaderPage}>
           <i class="fas fa-plus"></i> New Shader
         </button>
       {/if}
@@ -43,13 +43,15 @@
   }
 
   .navbar {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     padding: 0;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     position: sticky;
     top: 0;
     z-index: 1000;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.95) 100%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    backdrop-filter: blur(8px) saturate(120%)
   }
 
   .nav-container {

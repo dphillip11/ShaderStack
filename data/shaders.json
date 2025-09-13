@@ -3,6 +3,7 @@
     "id": 3,
     "user_id": 3,
     "name": "Uniforms Example",
+    "author": "demo",
     "shader_scripts": [
       {
         "id": 4,
@@ -21,16 +22,6 @@
           "width": 512,
           "height": 512
         }
-      }
-    ],
-    "tags": [
-      {
-        "id": 15,
-        "name": "demo"
-      },
-      {
-        "id": 16,
-        "name": "demo2"
       }
     ]
   },
@@ -72,7 +63,8 @@
   {
     "id": 7,
     "user_id": 3,
-    "name": "",
+    "name": "A proper name",
+    "author": "demo",
     "shader_scripts": [
       {
         "id": 1,
