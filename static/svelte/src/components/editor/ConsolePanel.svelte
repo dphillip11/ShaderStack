@@ -1,16 +1,15 @@
 <script>
-  import { ClearConsole, consoleMessages } from '../../stores/logging.js';
-  import {get} from 'svelte/store';
+  import { consoleMessages, clearConsole } from '../../stores/editor.js';
 </script>
 
 <div class="console-panel">
   <div class="console-header">
     <span>Console</span>
-    <button on:click={ClearConsole} aria-label="Clear console" class="clear-btn">✕</button>
+    <button on:click={clearConsole} aria-label="Clear console" class="clear-btn">✕</button>
   </div>
   <div class="console-content" >
-    {#each $consoleMessages as m (m.time)}
-      <div class="console-message {m.type}">[{m.time.toLocaleTimeString()}] {m.text}</div>
+    {#each $consoleMessages as m (m.id)}
+      <div class="console-message {m.type}">[{m.timestamp}] {m.message}</div>
     {/each}
     {#if !$consoleMessages.length}
       <div class="empty">No messages</div>

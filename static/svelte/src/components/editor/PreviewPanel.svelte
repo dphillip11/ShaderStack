@@ -1,6 +1,33 @@
 <script>
-  import { isRunning } from '../../stores/editor.js';
+  import { isInitializing, addConsoleMessage } from '../../stores/editor.js';
   import { activeScript } from '../../stores/active_shader.js';
+  import { startRealTime, stopRealTime, isRealTimeRunning } from '../../adapters/workspaceAdapter.js';
+  import { onMount } from 'svelte';
+
+  let realTimeMode = false;
+
+  function handleRealTimeToggle() {
+    realTimeMode = !realTimeMode;
+    if (realTimeMode) {
+      startRealTime();
+      addConsoleMessage('Real-time mode started', 'info');
+    } else {
+      stopRealTime();
+      addConsoleMessage('Real-time mode stopped', 'info');
+    }
+  }
+
+  // Sync real-time state
+  onMount(() => {
+    const interval = setInterval(() => {
+      const wsRealTime = isRealTimeRunning();
+      if (wsRealTime !== realTimeMode) {
+        realTimeMode = wsRealTime;
+      }
+    }, 100);
+    
+    return () => clearInterval(interval);
+  });
 </script>
 
 <div class="preview-panel">
@@ -11,8 +38,13 @@
         <span class="active-script">Script {$activeScript.id}</span>
       {/if}
       <div class="preview-status">
-        {#if $isRunning}<button class="btn-danger" on:click={() => isRunning.set(false)}>Stop</button>{/if}
-        {#if !$isRunning}<button class="btn-primary" on:click={() => isRunning.set(true)}>Run</button>{/if}
+        <button 
+          class="btn-primary" 
+          on:click={handleRealTimeToggle}
+          disabled={$isInitializing}
+        >
+          {realTimeMode ? 'Stop' : 'Run'}
+        </button>
       </div>
     </div>
   </div>
@@ -22,6 +54,14 @@
       {#if !$activeScript}
         <div id="canvas-overlay">
           <div>No script selected</div>
+        </div>
+      {:else if $isInitializing}
+        <div id="canvas-overlay">
+          <div>Initializing WebGPU...</div>
+        </div>
+      {:else if realTimeMode}
+        <div id="canvas-overlay" class="running-indicator">
+          <div>● Running</div>
         </div>
       {/if}
     </div>
@@ -73,6 +113,41 @@
   .preview-status {
     font-size: 0.8rem;
     color: #4a5568;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .btn-primary {
+    background-color: #3182ce;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background-color 0.2s;
+    min-width: 60px;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: #2c5aa0;
+  }
+
+  .btn-primary:disabled {
+    background-color: #a0aec0;
+    cursor: not-allowed;
+  }
+
+  .running-indicator {
+    background-color: rgba(26, 32, 44, 0.7);
+    color: #68d391;
+    font-weight: 600;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
   }
 
   .preview-content {

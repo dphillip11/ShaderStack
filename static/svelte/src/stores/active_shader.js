@@ -72,17 +72,24 @@ export function addNewScript() {
     // Update the shader
     currentShader.shader_scripts.push(newScript);
     
-    // set new active script index
-    activeScriptIndex.set(Math.max(0, get(activeScriptIndex) - 1));
+    // set new active script index to the newly added script
+    activeScriptIndex.set(currentShader.shader_scripts.length - 1);
+    
+    // Update the store
+    activeShader.set(currentShader);
 }
 
 export function deleteScript(index) {
     const currentShader = get(activeShader);
     if (!currentShader) return;
-    if (currentShader.shader_scripts?.length < index) return;
+    if (!currentShader.shader_scripts || currentShader.shader_scripts.length <= index) return;
 
     currentShader.shader_scripts.splice(index, 1);
 
     // set new active script index
-    activeScriptIndex.set(Math.max(0, index - 1));
+    const newIndex = Math.min(index, currentShader.shader_scripts.length - 1);
+    activeScriptIndex.set(Math.max(0, newIndex));
+    
+    // Update the store
+    activeShader.set(currentShader);
 }

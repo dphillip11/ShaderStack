@@ -72,17 +72,17 @@
     display: flex; 
     flex-direction: column;
     min-width: 300px;
-    height: 600px;
-    overflow: hidden;
+    min-height: 600px;
+    overflow: scroll;
   }
   
   .right-pane { 
     display: flex; 
     flex-direction: column; 
     gap: .75rem;
-    height: 600px;
+    min-height: 600px;
     min-width: 300px;
-    overflow: hidden;
+    overflow: scroll;
   }
 
   /* Resizable handle styles */
