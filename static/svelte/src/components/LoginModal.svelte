@@ -42,6 +42,7 @@
       error = e.message || 'Login failed'; 
       loading=false;
     }
+    loading=false;
   }
   function onKey(e){ if(e.key==='Escape') close(); if(e.key==='Enter') submit(); }
 </script>
@@ -77,16 +78,31 @@
 {/if}
 <style>
   :global(.svelte-modal-overlay) { 
-    position: fixed !important; 
-    inset: 0 !important; 
-    display: flex !important; 
-    align-items: center !important; 
-    justify-content: center !important; 
-    backdrop-filter: blur(3px) !important; 
-    background: rgba(0,0,0,.6) !important; 
-    z-index: 99999 !important; 
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    min-height: 100vh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 1rem;
+    box-sizing: border-box;
+    backdrop-filter: blur(3px) !important;
+    background: rgba(0,0,0,.6) !important;
+    z-index: 99999 !important;
+    overflow-y: auto !important;
   }
-  .modal-content { background:#1e2530; color:#fff; padding:1.25rem 1.5rem; width:340px; border-radius:10px; display:flex; flex-direction:column; gap:.75rem; box-shadow:0 10px 30px rgba(0,0,0,.4); }
+
+  .modal-content { 
+    margin: auto; /* reinforce centering when overlay is taller than content */
+    max-width: 90vw;
+    width: 340px;
+    background:#1e2530; color:#fff; padding:1.25rem 1.5rem; border-radius:10px;
+    display:flex; flex-direction:column; gap:.75rem; box-shadow:0 10px 30px rgba(0,0,0,.4);
+  }
   .modal-header { display:flex; justify-content:space-between; align-items:center; }
   .modal-close { background:none; border:none; font-size:1.25rem; color:#ccc; cursor:pointer; }
   .form-group { display:flex; flex-direction:column; gap:.35rem; }

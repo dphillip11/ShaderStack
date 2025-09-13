@@ -6,8 +6,14 @@
   import ScriptTabs from './editor/ScriptTabs.svelte';
   import {activeShader, AddTag, RemoveTag, SaveActiveShader} from '../stores/active_shader.js';
   import Tags from './Tags.svelte';
+  import { user } from '../stores/user';
+  import { derived } from 'svelte/store';
 
   let isEditingName = false;
+  let ownsShader = derived(
+    [user, activeShader],
+    ([$user, $activeShader]) => $user.is_authenticated && $activeShader && $activeShader.user_id === $user.user_id
+  );
   
 </script>
 {#if $activeShader}
@@ -27,13 +33,18 @@
   {:else}
     <div class="shader-title">
       <h2>{$activeShader.name}
-      <button class="edit-btn" on:click={() => isEditingName = true} aria-label="Edit shader name">
-        <span class="edit-icon">✏️</span>
-      </button></h2>
+        {#if $ownsShader}
+          <button class="edit-btn" on:click={() => isEditingName = true} aria-label="Edit shader name">
+            <span class="edit-icon">✏️</span>
+          </button>
+        {/if}
+      </h2>
     </div>
   {/if}
-  <Tags create=true edit=true tags={$activeShader.tags?.map(t => t.name) || []} on:add={({ detail }) => AddTag(detail.tag)} on:remove={({ detail }) => RemoveTag(detail.tag)} />
-  <button class="btn-confirm btn" id="save-button" on:click={SaveActiveShader}>Save</button>
+  <Tags create={$ownsShader} edit={$ownsShader} tags={$activeShader.tags?.map(t => t.name) || []} on:add={({ detail }) => AddTag(detail.tag)} on:remove={({ detail }) => RemoveTag(detail.tag)} />
+  {#if $ownsShader}
+    <button class="btn-confirm btn" id="save-button" on:click={SaveActiveShader}>Save</button>
+  {/if}
 </div>
 
 {/if}

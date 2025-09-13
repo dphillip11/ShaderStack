@@ -36,6 +36,9 @@ export function SaveActiveShader() {
 export function AddTag(tagString) {
     debugger;
     const currentShader = get(activeShader);
+    if (!currentShader.tags) {
+        currentShader.tags = [];
+    }
     if (currentShader.tags.map(t => t.name).includes(tagString)) return;
     currentShader.tags.push({ name: tagString, id: null });
     activeShader.set(currentShader);

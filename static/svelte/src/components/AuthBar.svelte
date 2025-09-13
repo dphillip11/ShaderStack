@@ -1,5 +1,5 @@
 <script>
-  import { user, logout, workOffline } from '../stores/user.js';
+  import { user, logout, workOffline, isOffline } from '../stores/user.js';
   import LoginModal from './LoginModal.svelte';
   import { onMount } from 'svelte';
   
@@ -21,7 +21,9 @@
   {:else}
     <button class="btn-small primary" on:click={openLogin} aria-label="Login"><i class="fas fa-sign-in-alt"></i> Login</button>
   {/if}
-  <button class="btn-small primary" on:click={workOffline} aria-label="Work Offline"><i class="fas fa-sign-in-alt"></i> Work Offline</button>
+  {#if !$isOffline}
+    <button class="btn-small primary" on:click={workOffline} aria-label="Work Offline"><i class="fas fa-sign-in-alt"></i> Work Offline</button>
+  {/if}
   <LoginModal bind:this={modal} />
 </div>
 <style>

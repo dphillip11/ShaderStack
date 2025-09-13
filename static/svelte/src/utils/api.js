@@ -12,7 +12,8 @@ export async function apiPost(path, body) {
     body: JSON.stringify(body)
   });
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
 }
 
 export async function apiPut(path, body) {
