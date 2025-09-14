@@ -1,5 +1,5 @@
 <script>
-  import { addNewScript, deleteScript, activeShader, activeScriptIndex, activeScript } from '../../stores/active_shader.js';
+  import { addNewScript, deleteScript, activeShader, activeScriptIndex, activeScript } from '../../stores/activeShader.js';
   import BufferControls from './BufferControls.svelte';
 </script>
 
@@ -31,6 +31,14 @@
   {#if $activeScript}
     <BufferControls 
       buffer={activeScript.buffer || { format: 'rgba8unorm', width: 512, height: 512 }}
+      on:change={(e) => {
+        activeShader.update(shader => {
+          if (shader && shader.shader_scripts && shader.shader_scripts[$activeScriptIndex]) {
+            shader.shader_scripts[$activeScriptIndex].buffer = e.detail;
+          }
+          return shader;
+        });
+      }}
     />
   {/if}
 </div>

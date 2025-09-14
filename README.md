@@ -10,6 +10,9 @@ This can be done manually:
 
 Issues
 ======
-* why do the texture dimensions not affect the output
-* how do compute shaders perform
-* should a wizard be used for creating new buffers, conditional injection based on vertext/fragment/compute
+* issues with texture dimensions
+* buffer controls broken
+* git hub action for npm build and host
+* add default shader import for offline shaders
+* how do compute shaders perform?
+* should a wizard be used for creating new buffers, conditional injection based on vertext/fragment/compute?

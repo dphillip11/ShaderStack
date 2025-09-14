@@ -4,7 +4,7 @@
   import ConsolePanel from './editor/ConsolePanel.svelte';
   import PreviewPanel from './editor/PreviewPanel.svelte';
   import ScriptTabs from './editor/ScriptTabs.svelte';
-  import {activeShader, AddTag, RemoveTag, SaveActiveShader} from '../stores/active_shader.js';
+  import {activeShader, AddTag, RemoveTag, SaveActiveShader} from '../stores/activeShader.js';
   import Tags from './Tags.svelte';
   import { user } from '../stores/user';
   import { derived } from 'svelte/store';

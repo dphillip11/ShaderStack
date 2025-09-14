@@ -1,6 +1,6 @@
 <script>
   import { isInitializing, addConsoleMessage } from '../../stores/editor.js';
-  import { activeScript } from '../../stores/active_shader.js';
+  import { activeScript } from '../../stores/activeShader.js';
   import { startRealTime, stopRealTime, isRealTimeRunning } from '../../adapters/workspaceAdapter.js';
   import { onMount } from 'svelte';
 

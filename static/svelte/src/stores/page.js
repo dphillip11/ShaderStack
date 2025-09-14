@@ -1,7 +1,7 @@
 import { writable, get} from 'svelte/store';
 import {filters, clearFilters} from '../stores/search.js';
 import {user} from '../stores/user.js';
-import {NewShader, activeShader} from '../stores/active_shader.js';
+import { NewShader, activeShader } from '../stores/activeShader.js';
 import { DEFAULT_FILTERS } from '../constants.js';
 
 export const pageState = writable({

@@ -1,7 +1,6 @@
 <script>
     import { writable, derived } from "svelte/store";
-  import { activeScript, displayedInjectedCode, activeScriptIndex } from "../../stores/active_shader";
-  import { compileErrorsByScript } from "../../stores/logging";
+  import { activeScript, displayedInjectedCode, scriptRuntimeData } from "../../stores/activeShader";
 
   let showInjectedCode = false;
   let textareaElement;
@@ -28,12 +27,11 @@
     return rawCode;
   }
 
-  // Listen for compilation errors from the store
-  $: if ($compileErrorsByScript && $activeScript) {
-    const latestErrors = $compileErrorsByScript[$activeScript.id] || [];
-    console.log('CodeEditor received errors for script', $activeScript.id, ':', latestErrors);
+  // Listen for compilation errors from the runtime store
+  $: if ($scriptRuntimeData && $activeScript) {
+    const runtime = $scriptRuntimeData[$activeScript.id];
+    const latestErrors = runtime?.errors || [];
     errors = extractLineNumbers(latestErrors);
-    console.log('Extracted line errors:', errors);
   }
 
   function extractLineNumbers(errorMessages) {
@@ -54,7 +52,7 @@
     if (!textareaElement || errors.length === 0) return;
 
     // This is a basic implementation - in a real editor you'd want syntax highlighting
-    const lines = localCode.split('\n');
+  const lines = (typeof localCode === 'string' ? localCode : '').split('\n');
     errors.forEach(error => {
       if (error.line > 0 && error.line <= lines.length) {
         // Add error indication - could be enhanced with line highlighting
@@ -65,9 +63,6 @@
 
   function toggleInjectedCode() {
     showInjectedCode = !showInjectedCode;
-    if (showInjectedCode) {
-      updateInjectedCodePreview();
-    }
   }
 
   // Re-highlight when errors change

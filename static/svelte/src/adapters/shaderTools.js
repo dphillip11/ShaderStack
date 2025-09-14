@@ -12,7 +12,7 @@ struct Uniforms {
 // Auto-injected texture bindings
 `;
 
-const DEFAULT_VERTEX_SHADER = `
+export const DEFAULT_VERTEX_SHADER = `
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
     var pos = array<vec2<f32>, 3>(

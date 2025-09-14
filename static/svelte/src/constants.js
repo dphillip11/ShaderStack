@@ -32,7 +32,7 @@ export const DEFAULT_FRAGMENT_SHADER_1 = `
 fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = coord.xy / u.resolution;
     let color = textureSample(buffer0, buffer0_sampler, uv);
-    return vec4<f32>(color.r, 1, 1, 1);
+    return vec4<f32>(color.b, 0.1, 0.25, 1);
 }
 `
 

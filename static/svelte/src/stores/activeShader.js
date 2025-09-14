@@ -1,7 +1,7 @@
-import {user} from "./user.js";
+import { user } from "./user.js";
 import { writable, derived, get } from "svelte/store";
 import { UpdateShader } from "./shaders.js";
-import {DEFAULT_SCRIPT} from "../constants.js";
+import { DEFAULT_SCRIPT_0, DEFAULT_SCRIPT_1 } from "../constants.js";
 
 export const activeShader = writable(null);
 export const activeScriptIndex = writable(0);
@@ -15,17 +15,63 @@ export const activeScript = derived(
     }
 );
 
-export const scriptRuntimeData = writable([
-    // injectedCode: '', compiledModule: ShaderModule, errors: []
-]);
+// Runtime data per scriptId: { [id: number]: { injectedCode?: string, compiledModule?: GPUShaderModule|null, errors?: Array<any> } }
+export const scriptRuntimeData = writable({});
+
+// Helper to get runtime data for a script id
+export function getScriptRuntime(scriptId) {
+    return get(scriptRuntimeData)[scriptId] || null;
+}
+
+// Upsert runtime data for a script
+export function updateScriptRuntime(scriptId, partial) {
+    scriptRuntimeData.update(map => {
+        const prev = map[scriptId] || {};
+        const next = { ...prev, ...partial };
+        const out = { ...map, [scriptId]: next };
+        return out;
+    });
+}
+
+// Clear runtime data for a script
+export function clearScriptRuntime(scriptId) {
+    scriptRuntimeData.update(map => {
+        if (!map[scriptId]) return map;
+        const out = { ...map };
+        delete out[scriptId];
+        return out;
+    });
+}
+
+// Current script's runtime convenience derived
+export const currentScriptRuntime = derived(
+    [scriptRuntimeData, activeScript],
+    ([$runtime, $activeScript]) => {
+        if (!$activeScript) return null;
+        return $runtime[$activeScript.id] || null;
+    }
+);
+
+// For debug UI: show injected part + user code for the active script
+export const displayedInjectedCode = derived(
+    [currentScriptRuntime, activeScript],
+    ([$runtime, $activeScript]) => {
+        if (!$activeScript) return '';
+        const injected = $runtime?.injectedCode || '';
+        const userCode = $activeScript.code || '';
+        if (!injected && !userCode) return '';
+        // Only injected part is stored; concatenate for preview
+        return `${injected}\n// --- user code ---\n${userCode}`.trim();
+    }
+);
 
 export function NewShader(){
     return {
         id: null,
         name: 'New Shader',
         description: '',
-        tags: [{ name: 'Shader', id: null }],
-        shader_scripts: [DEFAULT_SCRIPT],
+        tags: [],
+    shader_scripts: [DEFAULT_SCRIPT_0, DEFAULT_SCRIPT_1],
         user_id: get(user)?.user_id,
     };
 }
@@ -65,7 +111,9 @@ export function addNewScript() {
     if (currentShader.shader_scripts && currentShader.shader_scripts.length > 0) {
         nextID = Math.max(...currentShader.shader_scripts.map(s => s.id || 0)) + 1;
     }
-    const newScript = {...DEFAULT_SCRIPT, id: nextID};
+    // Choose a sensible default: first script uses base fragment, subsequent scripts sample from buffer0
+    const tpl = (currentShader.shader_scripts?.length ?? 0) === 0 ? DEFAULT_SCRIPT_0 : DEFAULT_SCRIPT_1;
+    const newScript = { ...tpl, id: nextID };
     
     // Make sure scripts array exists
     if (!currentShader.shader_scripts) {
@@ -87,7 +135,11 @@ export function deleteScript(index) {
     if (!currentShader) return;
     if (!currentShader.shader_scripts || currentShader.shader_scripts.length <= index) return;
 
-    currentShader.shader_scripts.splice(index, 1);
+    const removed = currentShader.shader_scripts.splice(index, 1);
+    // also clear runtime for removed script id
+    if (removed && removed[0] && removed[0].id != null) {
+        clearScriptRuntime(removed[0].id);
+    }
 
     // set new active script index
     const newIndex = Math.min(index, currentShader.shader_scripts.length - 1);
