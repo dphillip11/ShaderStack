@@ -1,7 +1,7 @@
 import { user } from "./user.js";
 import { writable, derived, get } from "svelte/store";
 import { UpdateShader } from "./shaders.js";
-import { DEFAULT_SCRIPT_0, DEFAULT_SCRIPT_1 } from "../constants.js";
+import { DEFAULT_SCRIPT_0, DEFAULT_SCRIPT_1, DEFAULT_COMPUTE_SCRIPT } from "../constants.js";
 
 export const activeShader = writable(null);
 export const activeScriptIndex = writable(0);
@@ -88,7 +88,7 @@ export function RemoveTag(tagString) {
     activeShader.set(currentShader);
 }
 
-export function addNewScript() {
+export function addNewScript(kind = 'fragment') {
     const currentShader = get(activeShader);
     if (!currentShader) return;
     
@@ -97,8 +97,13 @@ export function addNewScript() {
     if (currentShader.shader_scripts && currentShader.shader_scripts.length > 0) {
         nextID = Math.max(...currentShader.shader_scripts.map(s => s.id || 0)) + 1;
     }
-    // Choose a sensible default: first script uses base fragment, subsequent scripts sample from buffer0
-    const tpl = (currentShader.shader_scripts?.length ?? 0) === 0 ? DEFAULT_SCRIPT_0 : DEFAULT_SCRIPT_1;
+    // Choose a sensible default per kind
+    let tpl;
+    if (kind === 'compute') {
+        tpl = DEFAULT_COMPUTE_SCRIPT;
+    } else {
+        tpl = (currentShader.shader_scripts?.length ?? 0) === 0 ? DEFAULT_SCRIPT_0 : DEFAULT_SCRIPT_1;
+    }
     const newScript = { ...tpl, id: nextID };
     
     // Make sure scripts array exists

@@ -55,3 +55,38 @@ export const DEFAULT_SCRIPT_1 = {
     height: 512
   }
 };
+
+// Compute defaults: we reuse buffer.width/height as the logical output size
+// and derive dispatch counts from workgroupSize. Adapter/UI can override later if needed.
+export const DEFAULT_WORKGROUP_SIZE = { x: 16, y: 16, z: 1 };
+
+export const DEFAULT_COMPUTE_SHADER = `
+// Writes a simple gradient to a storage texture. The workspace will inject bindings for:
+// - outTex: texture_storage_2d<rgba8unorm, write>
+// - u: uniforms with resolution (vec2<f32>) and time (f32)
+@compute @workgroup_size(16, 16, 1)
+fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    // Guard against out-of-bounds invocations
+    if (gid.x >= u32(u.resolution.x) || gid.y >= u32(u.resolution.y)) { return; }
+
+    let uv = vec2<f32>(gid.xy) / u.resolution;
+    let color = vec4<f32>(uv, 0.5 + 0.5 * sin(u.time), 1.0);
+    textureStore(outTex, vec2<i32>(gid.xy), color);
+}
+`;
+
+export const DEFAULT_COMPUTE_SCRIPT = {
+  id: 2,
+  kind: 'compute',
+  code: DEFAULT_COMPUTE_SHADER,
+  buffer: {
+    // Storage-capable format; adapter should validate/adjust if unsupported
+    format: 'rgba8unorm',
+    width: 512,
+    height: 512,
+  },
+  compute: {
+    workgroupSize: { ...DEFAULT_WORKGROUP_SIZE },
+    // dispatch is derived as ceil(width/x), ceil(height/y), z=1 by the adapter
+  },
+};

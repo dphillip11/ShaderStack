@@ -17,10 +17,20 @@ type BufferSpec struct {
 	Height int    `json:"height"`
 }
 
+type ComputeSpec struct {
+	WorkgroupSize struct {
+		X int `json:"x"`
+		Y int `json:"y"`
+		Z int `json:"z"`
+	} `json:"workgroupSize"`
+}
+
 type ShaderScript struct {
-	ID     int        `json:"id"`
-	Code   string     `json:"code"`
-	Buffer BufferSpec `json:"buffer"`
+	ID      int          `json:"id"`
+	Code    string       `json:"code"`
+	Buffer  BufferSpec   `json:"buffer"`
+	Kind    string       `json:"kind,omitempty"` // 'fragment' (default) or 'compute'
+	Compute *ComputeSpec `json:"compute,omitempty"`
 }
 
 type Shader struct {

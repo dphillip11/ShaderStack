@@ -29,17 +29,30 @@
   </div>
   
   {#if $activeScript}
-    <BufferControls 
-      buffer={activeScript.buffer || { format: 'rgba8unorm', width: 512, height: 512 }}
-      on:change={(e) => {
-        activeShader.update(shader => {
-          if (shader && shader.shader_scripts && shader.shader_scripts[$activeScriptIndex]) {
-            shader.shader_scripts[$activeScriptIndex].buffer = e.detail;
-          }
-          return shader;
-        });
-      }}
-    />
+    {#key $activeScript.id}
+      <BufferControls 
+        buffer={{ ...($activeScript.buffer || { format: 'rgba8unorm', width: 512, height: 512 }) }}
+        kind={$activeScript.kind || 'fragment'}
+        compute={{ workgroupSize: { ...($activeScript.compute?.workgroupSize || { x: 16, y: 16, z: 1 }) } }}
+        on:change={(e) => {
+          const { buffer, kind, compute } = e.detail;
+          activeShader.update(shader => {
+            if (!(shader && shader.shader_scripts && shader.shader_scripts[$activeScriptIndex])) return shader;
+            // Immutable updates to trigger reactivity
+            const idx = $activeScriptIndex;
+            const nextScripts = shader.shader_scripts.slice();
+            const prev = nextScripts[idx] || {};
+            nextScripts[idx] = {
+              ...prev,
+              buffer: { ...buffer },
+              kind,
+              compute: kind === 'compute' ? { ...(compute || {}), workgroupSize: { ...(compute?.workgroupSize || { x:16,y:16,z:1 }) } } : null,
+            };
+            return { ...shader, shader_scripts: nextScripts };
+          });
+        }}
+      />
+    {/key}
   {/if}
 </div>
 

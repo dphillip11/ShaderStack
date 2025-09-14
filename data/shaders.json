@@ -15,7 +15,7 @@
       },
       {
         "id": 1,
-        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    var pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    // Sample from previous scripts if available\n    // let previousColor = textureSample(buffer1, buffer1_sampler, uv);\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(u.time));\n    return vec4\u003cf32\u003e(color, 1.0);\n}",
+        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    let pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(u.time));\n    return vec4\u003cf32\u003e(color, 1.0);\n}",
         "buffer": {
           "format": "rgba8unorm",
           "width": 512,
@@ -41,7 +41,7 @@
     "shader_scripts": [
       {
         "id": 0,
-        "code": "\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    // Sample from previous scripts if available\n    // let previousColor = textureSample(buffer1, buffer1_sampler, uv);\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(5.0 * u.time));\n    return vec4\u003cf32\u003e(color,1.0);\n}\n",
+        "code": "@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(5.0 * u.time));\n    return vec4\u003cf32\u003e(color,1.0);\n}\n",
         "buffer": {
           "format": "rgba8unorm",
           "width": 512,
@@ -55,5 +55,84 @@
         "name": "Shader"
       }
     ]
+  },
+  {
+    "id": 7,
+    "user_id": 5,
+    "name": "Compute Tiled Blur Demo",
+    "author": "daniel",
+    "shader_scripts": [
+      {
+        "id": 0,
+        "code": "@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n  let uv = coord.xy / u.resolution;\n  // Procedural pattern: checker + time-based ripple\n  let x_check = fract(uv.x * 8.0) \u003e 0.5;\n  let y_check = fract(uv.y * 8.0) \u003e 0.5;\n  let checker = select(0.0, 1.0, x_check != y_check);\n  let ripple = 0.5 + 0.5 * sin(20.0 * (uv.x + uv.y) + u.time * 2.0);\n  let base = mix(vec3\u003cf32\u003e(0.1,0.2,0.7), vec3\u003cf32\u003e(0.9,0.6,0.2), ripple);\n  let c = mix(base, vec3\u003cf32\u003e(1.0) - base, checker);\n  return vec4\u003cf32\u003e(c, 1.0);\n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
+        }
+      },
+      {
+        "id": 1,
+        "code": "@compute @workgroup_size(16, 16, 1)\nfn cs_main(\n  @builtin(global_invocation_id) gid: vec3\u003cu32\u003e\n) {\n  if (gid.x \u003e= u32(u.resolution.x) || gid.y \u003e= u32(u.resolution.y)) { return; }\n  \n  let coord = vec2\u003ci32\u003e(i32(gid.x), i32(gid.y));\n  var\u003cfunction\u003e sum = vec4\u003cf32\u003e(0.0);\n  \n  // Simple 3x3 blur\n  for (var\u003cfunction\u003e dy = -1; dy \u003c= 1; dy++) {\n    for (var\u003cfunction\u003e dx = -1; dx \u003c= 1; dx++) {\n      let sampleCoord = coord + vec2\u003ci32\u003e(dx, dy);\n      let clampedCoord = vec2\u003ci32\u003e(\n        clamp(sampleCoord.x, 0, i32(u.resolution.x) - 1),\n        clamp(sampleCoord.y, 0, i32(u.resolution.y) - 1)\n      );\n      sum = sum + textureLoad(buffer0, clampedCoord, 0);\n    }\n  }\n  \n  let blurred = sum / 9.0;\n  textureStore(outTex, coord, blurred);\n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
+        },
+        "kind": "compute",
+        "compute": {
+          "workgroupSize": {
+            "x": 16,
+            "y": 16,
+            "z": 1
+          }
+        }
+      },
+      {
+        "id": 2,
+        "code": "@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n  let uv = coord.xy / u.resolution;\n  // Visualize compute output\n  let c = textureSample(buffer1, buffer1_sampler, uv);\n  return c;\n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
+        }
+      }
+    ],
+    "tags": [
+      {
+        "id": 3,
+        "name": "compute"
+      },
+      {
+        "id": 1,
+        "name": "fragment"
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "user_id": 5,
+    "name": "Circle Collision Physics",
+    "author": "daniel",
+    "shader_scripts": [
+      {
+        "id": 0,
+        "code": "@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n  let uv = coord.xy / u.resolution;\n  var\u003cfunction\u003e color = vec3\u003cf32\u003e(0.1, 0.1, 0.2);\n  \n  // Draw circles based on simulation data\n  let numCircles = 32;\n  let circleRadius = 0.02;\n  \n  for (var\u003cfunction\u003e i = 0; i \u003c numCircles; i++) {\n    // Simulate circle positions (in real implementation, read from storage buffer)\n    let angle = f32(i) * 0.19634 + u.time * 0.5;\n    let pos = vec2\u003cf32\u003e(\n      0.5 + 0.3 * cos(angle + u.time * 0.3),\n      0.5 + 0.3 * sin(angle * 1.1 + u.time * 0.2)\n    );\n    \n    let dist = length(uv - pos);\n    if (dist \u003c circleRadius) {\n      let hue = f32(i) / f32(numCircles);\n      color = vec3\u003cf32\u003e(\n        0.5 + 0.5 * cos(hue * 6.28 + 0.0),\n        0.5 + 0.5 * cos(hue * 6.28 + 2.09),\n        0.5 + 0.5 * cos(hue * 6.28 + 4.18)\n      );\n    }\n  }\n  \n  return vec4\u003cf32\u003e(color, 1.0);\n}",
+        "buffer": { "format": "rgba8unorm", "width": 512, "height": 512 }
+      },
+      {
+        "id": 1,
+        "kind": "compute",
+        "compute": { "workgroupSize": { "x": 8, "y": 1, "z": 1 } },
+        "buffer": { "format": "rgba8unorm", "width": 512, "height": 512 },
+        "code": "struct Circle {\n  position: vec2\u003cf32\u003e,\n  velocity: vec2\u003cf32\u003e,\n  radius: f32,\n  mass: f32,\n};\n\n// Pseudo-random number generator\nfn hash(p: vec2\u003cf32\u003e) -\u003e f32 {\n  let p3 = fract(vec3\u003cf32\u003e(p.xyx) * 0.1031);\n  let p3_dot = dot(p3, vec3\u003cf32\u003e(p3.yzx) + 33.333);\n  return fract((p3.x + p3.y) * p3_dot);\n}\n\n@compute @workgroup_size(8, 1, 1)\nfn cs_main(\n  @builtin(global_invocation_id) gid: vec3\u003cu32\u003e\n) {\n  let numCircles = 32;\n  let circleIndex = gid.x;\n  \n  if (circleIndex \u003e= u32(numCircles)) { return; }\n  \n  let dt = 0.016; // 60 FPS\n  let damping = 0.98;\n  let boundsSize = vec2\u003cf32\u003e(0.9, 0.9);\n  \n  // Initialize circle data (in real implementation, this would be in a storage buffer)\n  var\u003cfunction\u003e circle: Circle;\n  let seed = vec2\u003cf32\u003e(f32(circleIndex), u.time * 0.1);\n  \n  // Initialize position and velocity based on circle index and time\n  let angle = f32(circleIndex) * 0.19634 + u.time * 0.1;\n  circle.position = vec2\u003cf32\u003e(\n    0.5 + 0.1 * cos(angle),\n    0.5 + 0.1 * sin(angle)\n  );\n  \n  circle.velocity = vec2\u003cf32\u003e(\n    (hash(seed) - 0.5) * 0.2,\n    (hash(seed + vec2\u003cf32\u003e(1.0, 0.0)) - 0.5) * 0.2\n  );\n  \n  circle.radius = 0.02;\n  circle.mass = 1.0;\n  \n  // Update position\n  circle.position = circle.position + circle.velocity * dt;\n  \n  // Boundary collision\n  if (circle.position.x - circle.radius \u003c 0.05) {\n    circle.position.x = 0.05 + circle.radius;\n    circle.velocity.x = abs(circle.velocity.x);\n  }\n  if (circle.position.x + circle.radius \u003e 0.95) {\n    circle.position.x = 0.95 - circle.radius;\n    circle.velocity.x = -abs(circle.velocity.x);\n  }\n  if (circle.position.y - circle.radius \u003c 0.05) {\n    circle.position.y = 0.05 + circle.radius;\n    circle.velocity.y = abs(circle.velocity.y);\n  }\n  if (circle.position.y + circle.radius \u003e 0.95) {\n    circle.position.y = 0.95 - circle.radius;\n    circle.velocity.y = -abs(circle.velocity.y);\n  }\n  \n  // Apply damping\n  circle.velocity = circle.velocity * damping;\n  \n  // Circle-circle collision detection and resolution\n  for (var\u003cfunction\u003e j = 0; j \u003c numCircles; j++) {\n    if (j == i32(circleIndex)) { continue; }\n    \n    // Get other circle data\n    var\u003cfunction\u003e other: Circle;\n    let otherAngle = f32(j) * 0.19634 + u.time * 0.1;\n    other.position = vec2\u003cf32\u003e(\n      0.5 + 0.1 * cos(otherAngle),\n      0.5 + 0.1 * sin(otherAngle)\n    );\n    other.radius = 0.02;\n    other.mass = 1.0;\n    \n    let delta = circle.position - other.position;\n    let distance = length(delta);\n    let minDistance = circle.radius + other.radius;\n    \n    if (distance \u003c minDistance && distance \u003e 0.001) {\n      // Collision detected\n      let normal = delta / distance;\n      let overlap = minDistance - distance;\n      \n      // Separate circles\n      circle.position = circle.position + normal * overlap * 0.5;\n      \n      // Elastic collision response\n      let relativeVelocity = dot(circle.velocity, normal);\n      if (relativeVelocity \u003e 0.0) { continue; } // Objects separating\n      \n      let restitution = 0.8;\n      var\u003cfunction\u003e impulse = -(1.0 + restitution) * relativeVelocity;\n      impulse = impulse / (1.0 / circle.mass + 1.0 / other.mass);\n      \n      circle.velocity = circle.velocity + (impulse / circle.mass) * normal;\n    }\n  }\n  \n  // Store result (in real implementation, write to storage buffer)\n  // For visualization, we'll encode position into output texture\n  let pixelCoord = vec2\u003ci32\u003e(\n    i32(circle.position.x * f32(u.resolution.x)),\n    i32(circle.position.y * f32(u.resolution.y))\n  );\n  \n  if (pixelCoord.x \u003e= 0 && pixelCoord.x \u003c i32(u.resolution.x) &&\n      pixelCoord.y \u003e= 0 && pixelCoord.y \u003c i32(u.resolution.y)) {\n    let color = vec4\u003cf32\u003e(\n      f32(circleIndex) / f32(numCircles),\n      length(circle.velocity) * 5.0,\n      1.0,\n      1.0\n    );\n    textureStore(outTex, pixelCoord, color);\n  }\n}"
+      },
+      {
+        "id": 2,
+        "code": "@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n  let uv = coord.xy / u.resolution;\n  \n  // Sample the compute shader output\n  let computeResult = textureSample(buffer1, buffer1_sampler, uv);\n  \n  // Create a dynamic background\n  let bg = vec3\u003cf32\u003e(\n    0.1 + 0.05 * sin(uv.x * 10.0 + u.time),\n    0.1 + 0.05 * cos(uv.y * 8.0 + u.time * 0.7),\n    0.2\n  );\n  \n  // Blend compute result with background\n  let final = mix(bg, computeResult.rgb, computeResult.a * 0.8);\n  \n  return vec4\u003cf32\u003e(final, 1.0);\n}",
+        "buffer": { "format": "rgba8unorm", "width": 512, "height": 512 }
+      }
+    ],
+    "tags": [ { "id": 4, "name": "physics" }, { "id": 3, "name": "compute" }, { "id": 5, "name": "collision" } ]
   }
 ]
