@@ -1,23 +1,18 @@
-import { writable, derived } from 'svelte/store';
+import { writable } from 'svelte/store';
 
 export const isRunning = writable(false);
 export const isInitializing = writable(false);
 export const webgpuReady = writable(false);
 export const lastError = writable(null);
+
 export const consoleMessages = writable([]);
 
-export function addConsoleMessage(message, type = 'info') {
-  consoleMessages.update(messages => [
-    ...messages,
-    {
-      id: Date.now(),
-      message,
-      type,
-      timestamp: new Date().toLocaleTimeString()
-    }
-  ]);
+// Append console message (pure helper)
+export function AddConsoleMessage(text, type = 'info') {
+  consoleMessages.set([...get(consoleMessages).slice(-99), { time: new Date(), type, text }]);
 }
 
-export function clearConsole() {
+export function ClearConsole() {
   consoleMessages.set([]);
 }
+

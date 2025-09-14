@@ -55,14 +55,6 @@
         <div id="canvas-overlay">
           <div>No script selected</div>
         </div>
-      {:else if $isInitializing}
-        <div id="canvas-overlay">
-          <div>Initializing WebGPU...</div>
-        </div>
-      {:else if realTimeMode}
-        <div id="canvas-overlay" class="running-indicator">
-          <div>● Running</div>
-        </div>
       {/if}
     </div>
   </div>

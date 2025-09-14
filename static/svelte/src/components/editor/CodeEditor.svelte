@@ -1,6 +1,6 @@
 <script>
     import { writable, derived } from "svelte/store";
-  import { activeScript, injectedCode, activeScriptIndex } from "../../stores/active_shader";
+  import { activeScript, displayedInjectedCode, activeScriptIndex } from "../../stores/active_shader";
   import { compileErrorsByScript } from "../../stores/logging";
 
   let showInjectedCode = false;
@@ -31,7 +31,9 @@
   // Listen for compilation errors from the store
   $: if ($compileErrorsByScript && $activeScript) {
     const latestErrors = $compileErrorsByScript[$activeScript.id] || [];
+    console.log('CodeEditor received errors for script', $activeScript.id, ':', latestErrors);
     errors = extractLineNumbers(latestErrors);
+    console.log('Extracted line errors:', errors);
   }
 
   function extractLineNumbers(errorMessages) {
@@ -104,16 +106,7 @@
         bind:value={$activeScript.code} 
         spellcheck="false" 
         aria-label="WGSL code editor"
-        placeholder="Enter your WGSL shader code here...
-
-// Available uniforms:
-// u.time - elapsed time in seconds
-// u.mouse - mouse position (0-1, 0-1)
-// u.resolution - buffer resolution
-// u.frame - frame counter
-
-// Available textures (from other scripts):
-// buffer1, buffer2, etc. with corresponding samplers"></textarea>
+        placeholder="Enter your WGSL shader code here..."></textarea>
     </div>
     
     <div class="injected-section">
@@ -127,7 +120,7 @@
       
       {#if showInjectedCode}
         <div class="injected-code-container">
-          <pre class="injected-code">{$injectedCode || '// No injected code available'}</pre>
+          <pre class="injected-code">{$displayedInjectedCode || '// No injected code available'}</pre>
         </div>
       {/if}
     </div>

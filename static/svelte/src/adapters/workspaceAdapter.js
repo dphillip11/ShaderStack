@@ -1,78 +1,28 @@
 import { get } from 'svelte/store';
-import { activeShader, activeScript, injectedCode } from '../stores/active_shader.js';
+import { activeShader, activeScript, setCompiledInjectedCode } from '../stores/activeShader.js';
 import { isRunning } from '../stores/editor.js';
+import { addCompileError, clearCompileErrors } from '../stores/logging.js';
 import { DEFAULT_VERTEX_SHADER } from '../constants.js';
 
-class ShaderCompiler {
-  constructor() {
-    this.uniformsTemplate = `
-// Auto-injected uniforms
-struct Uniforms {
-    time: f32,
-    mouse: vec2<f32>,
-    resolution: vec2<f32>,
-    frame: u32,
+const SAMPLE_TEXTURE_SHADER_SCRIPT = `
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
+    var pos = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>( 3.0, -1.0),
+        vec2<f32>(-1.0,  3.0)
+    );
+    return vec4<f32>(pos[vertex_index], 0.0, 1.0);
 }
 
-@group(0) @binding(0) var<uniform> u: Uniforms;
-`;
+@group(0) @binding(0) var sourceTexture: texture_2d<f32>;
+@group(0) @binding(1) var sourceSampler: sampler;
 
-    this.textureBindingsTemplate = `
-// Auto-injected texture bindings
-{TEXTURE_BINDINGS}
-`;
-  }
-
-  injectBufferBindings(userCode, availableBuffers) {
-    let injectedCode = this.uniformsTemplate;
-    
-    // Add texture bindings for available buffers
-    let textureBindings = '';
-    let bindingIndex = 1;
-    
-    for (const [scriptId, bufferSpec] of availableBuffers) {
-      textureBindings += `@group(0) @binding(${bindingIndex}) var buffer${scriptId}: texture_2d<f32>;\n`;
-      textureBindings += `@group(0) @binding(${bindingIndex + 1}) var buffer${scriptId}_sampler: sampler;\n`;
-      bindingIndex += 2;
-    }
-    
-    injectedCode += this.textureBindingsTemplate.replace('{TEXTURE_BINDINGS}', textureBindings);
-    injectedCode += '\n// User code begins here\n';
-    injectedCode += userCode;
-    
-    return injectedCode;
-  }
-
-  async compile(code, device) {
-    try {
-      const fullShader = DEFAULT_VERTEX_SHADER + '\n' + code;
-      const shaderModule = device.createShaderModule({
-        code: fullShader,
-        label: 'Compiled Shader'
-      });
-
-      // Check for compilation errors
-      const compilationInfo = await shaderModule.getCompilationInfo();
-      const errors = compilationInfo.messages.filter(msg => msg.type === 'error');
-      
-      if (errors.length > 0) {
-        const errorMessages = errors.map(err => 
-          `Line ${err.lineNum}: ${err.message}`
-        ).join('\n');
-        throw new Error(`Shader compilation failed:\n${errorMessages}`);
-      }
-
-      const warnings = compilationInfo.messages.filter(msg => msg.type === 'warning');
-      if (warnings.length > 0) {
-        console.warn('Shader compilation warnings:', warnings);
-      }
-
-      return shaderModule;
-    } catch (error) {
-      throw new Error(`Shader compilation error: ${error.message}`);
-    }
-  }
-}
+@fragment
+fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
+    let uv = coord.xy / vec2<f32>(${this.canvas.width}, ${this.canvas.height});
+    return textureSample(sourceTexture, sourceSampler, uv);
+}`;
 
 class ScriptEngine {
   constructor(device, shaderCompiler) {
@@ -87,6 +37,9 @@ class ScriptEngine {
 
   async createScript(scriptId, code, bufferSpec) {
     try {
+      // Clear any previous compilation errors for this script
+      clearCompileErrors(scriptId);
+      
       const availableBuffers = new Map();
       
       // Get available buffers from all scripts in the current shader
@@ -222,6 +175,8 @@ class ScriptEngine {
       return true;
     } catch (error) {
       console.error(`Script ${scriptId} compilation failed:`, error.message);
+      console.log('Adding compile error to store for script:', scriptId, error.message);
+      addCompileError(scriptId, error.message);
       throw error;
     }
   }
@@ -407,13 +362,13 @@ class WebGPUWorkspace {
       await this.scriptEngine.createScript(scriptId, code, bufferSpec);
       await this.scriptEngine.rebuildAllBindGroups();
       
-      // Update the injected code store for the current active script
-      const currentScript = get(activeScript);
-      if (currentScript && currentScript.id === scriptId) {
-        const compiledScript = this.scriptEngine.scripts.get(scriptId);
-        if (compiledScript && compiledScript.code) {
-          injectedCode.set(compiledScript.code);
-        }
+      // Clear any compilation errors on successful compilation
+      clearCompileErrors(scriptId);
+      
+      // Update the injected code store with the compiled version
+      const compiledScript = this.scriptEngine.scripts.get(scriptId);
+      if (compiledScript && compiledScript.code) {
+        setCompiledInjectedCode(scriptId, compiledScript.code);
       }
       
       return true;
@@ -501,30 +456,10 @@ class WebGPUWorkspace {
 
     const commandEncoder = this.device.createCommandEncoder();
     const canvasTexture = this.context.getCurrentTexture();
-    
-    const copyShaderCode = `
-@vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
-    var pos = array<vec2<f32>, 3>(
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>( 3.0, -1.0),
-        vec2<f32>(-1.0,  3.0)
-    );
-    return vec4<f32>(pos[vertex_index], 0.0, 1.0);
-}
-
-@group(0) @binding(0) var sourceTexture: texture_2d<f32>;
-@group(0) @binding(1) var sourceSampler: sampler;
-
-@fragment
-fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
-    let uv = coord.xy / vec2<f32>(${this.canvas.width}, ${this.canvas.height});
-    return textureSample(sourceTexture, sourceSampler, uv);
-}`;
 
     if (!this.copyPipeline) {
       const copyShaderModule = this.device.createShaderModule({
-        code: copyShaderCode
+        code: SAMPLE_TEXTURE_SHADER_SCRIPT
       });
 
       this.copyPipeline = this.device.createRenderPipeline({

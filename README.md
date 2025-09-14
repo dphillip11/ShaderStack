@@ -10,7 +10,6 @@ This can be done manually:
 
 Issues
 ======
-* no registration option on login dialog
 * why do the texture dimensions not affect the output
 * how do compute shaders perform
 * should a wizard be used for creating new buffers, conditional injection based on vertext/fragment/compute

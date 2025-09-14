@@ -4,11 +4,11 @@
   import ConsolePanel from './editor/ConsolePanel.svelte';
   import PreviewPanel from './editor/PreviewPanel.svelte';
   import ScriptTabs from './editor/ScriptTabs.svelte';
-  import {activeShader, activeScript, AddTag, RemoveTag, SaveActiveShader, injectedCode} from '../stores/active_shader.js';
+  import {activeShader, AddTag, RemoveTag, SaveActiveShader} from '../stores/active_shader.js';
   import Tags from './Tags.svelte';
   import { user } from '../stores/user';
   import { derived } from 'svelte/store';
-  import { initWorkspace, getWorkspace } from '../adapters/workspaceAdapter.js';
+  import { initWorkspace } from '../adapters/workspaceAdapter.js';
   import { isInitializing, addConsoleMessage } from '../stores/editor.js';
   import { onMount } from 'svelte';
 
@@ -30,62 +30,6 @@
       isInitializing.set(false);
     }
   });
-
-  // Update injected code when active script changes
-  $: if ($activeScript && $activeShader) {
-    const workspace = getWorkspace();
-    if (workspace && workspace.scriptEngine) {
-      const compiledScript = workspace.scriptEngine.scripts.get($activeScript.id);
-      if (compiledScript && compiledScript.code) {
-        // Show the already compiled injected code
-        injectedCode.set(compiledScript.code);
-      } else {
-        // Generate preview of what would be injected based on all scripts in the shader
-        const availableBuffers = new Map();
-        if ($activeShader.shader_scripts) {
-          for (const script of $activeShader.shader_scripts) {
-            if (script.id !== $activeScript.id) {
-              availableBuffers.set(script.id, script.buffer);
-            }
-          }
-        }
-        const previewCode = workspace.shaderCompiler.injectBufferBindings($activeScript.code, availableBuffers);
-        injectedCode.set(previewCode);
-      }
-    } else {
-      // Workspace not ready, show injection preview based on shader scripts
-      let textureBindings = '';
-      let bindingIndex = 1;
-      
-      if ($activeShader.shader_scripts) {
-        for (const script of $activeShader.shader_scripts) {
-          if (script.id !== $activeScript.id) {
-            textureBindings += `@group(0) @binding(${bindingIndex}) var buffer${script.id}: texture_2d<f32>;\n`;
-            textureBindings += `@group(0) @binding(${bindingIndex + 1}) var buffer${script.id}_sampler: sampler;\n`;
-            bindingIndex += 2;
-          }
-        }
-      }
-      
-      const basicInjection = `
-// Auto-injected uniforms
-struct Uniforms {
-    time: f32,
-    mouse: vec2<f32>,
-    resolution: vec2<f32>,
-    frame: u32,
-}
-
-@group(0) @binding(0) var<uniform> u: Uniforms;
-
-// Auto-injected texture bindings
-${textureBindings || '// (No other scripts available yet)'}
-
-// User code begins here
-${$activeScript.code}`;
-      injectedCode.set(basicInjection);
-    }
-  }
   
 </script>
 {#if $activeShader}

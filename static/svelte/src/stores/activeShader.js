@@ -1,11 +1,10 @@
 import {user} from "./user.js";
 import { writable, derived, get } from "svelte/store";
-import { shaders, UpdateShader } from "../stores/shaders";
+import { UpdateShader } from "./shaders.js";
 import {DEFAULT_SCRIPT} from "../constants.js";
 
 export const activeShader = writable(null);
 export const activeScriptIndex = writable(0);
-export const injectedCode = writable("");
 export const activeScript = derived(
     [activeShader, activeScriptIndex],
     ([shader, scriptIndex]) => {
@@ -15,6 +14,10 @@ export const activeScript = derived(
         return shader.shader_scripts[scriptIndex];
     }
 );
+
+export const scriptRuntimeData = writable([
+    // injectedCode: '', compiledModule: ShaderModule, errors: []
+]);
 
 export function NewShader(){
     return {
