@@ -49,14 +49,21 @@ class ScriptEngine {
   needsRecompile(scriptId, userCode, availableBuffers) {
     const existing = this.scripts.get(scriptId);
     if (!existing) return true;
-    // Recompile if user code changed or buffer count changed
-    const prevKey = existing._compileKey;
-    const key = `${userCode.length}|buffers:${availableBuffers.size}`;
-    return prevKey !== key;
+    const currentShader = get(activeShader);
+    const shaderId = currentShader?.id ?? '__no_shader__';
+    // Recompile if shader changed, source changed, or buffer topology changed
+    if (existing._shaderId !== shaderId) return true;
+    if (existing.sourceCode !== userCode) return true;
+    if ((existing._bufferCount ?? 0) !== availableBuffers.size) return true;
+    // Also recompile if output buffer spec changed
+    const bs = existing.bufferSpec || {};
+    const cur = (get(activeShader)?.shader_scripts || []).find(s => s.id === scriptId)?.buffer || {};
+    if (bs.width !== cur.width || bs.height !== cur.height || bs.format !== cur.format) return true;
+    return false;
   }
 
   async ensureCompiled(scriptId, userCode, bufferSpec) {
-    // Build available buffers map like in createScript
+  // Build available buffers map like in createScript
     const shader = get(activeShader);
     const availableBuffers = new Map();
     if (shader && shader.shader_scripts) {
@@ -66,9 +73,6 @@ class ScriptEngine {
     }
     if (this.needsRecompile(scriptId, userCode, availableBuffers)) {
       await this.createScript(scriptId, userCode, bufferSpec);
-      // Update compile key
-      const entry = this.scripts.get(scriptId);
-      if (entry) entry._compileKey = `${userCode.length}|buffers:${availableBuffers.size}`;
       await this.rebuildAllBindGroups();
     }
   }
@@ -228,7 +232,9 @@ class ScriptEngine {
         bindGroupLayout,
         sampler,
         code: fullCode,
-        sourceCode: code
+  sourceCode: code,
+  _shaderId: get(activeShader)?.id ?? '__no_shader__',
+  _bufferCount: availableBuffers.size
       });
 
       return true;
@@ -381,6 +387,14 @@ class ScriptEngine {
       layout: script.bindGroupLayout,
       entries: bindGroupEntries
     });
+  }
+
+  clearAll() {
+    for (const [id, s] of this.scripts) {
+      try { s.texture?.destroy(); } catch {}
+      try { s.uniformBuffer?.destroy(); } catch {}
+    }
+    this.scripts.clear();
   }
 }
 
@@ -591,7 +605,6 @@ class WebGPUWorkspace {
       } catch (error) {
         // Only log significant errors, not missing scripts
       }
-      
       this.animationId = requestAnimationFrame(animate);
     };
     
@@ -604,6 +617,14 @@ class WebGPUWorkspace {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
+  }
+
+  dispose() {
+    try { this.stopRealTime(); } catch {}
+    try { this.scriptEngine?.clearAll(); } catch {}
+    this.copyPipeline = null;
+    this.copySampler = null;
+    this.isInitialized = false;
   }
 
   deleteScript(scriptId) {
@@ -655,4 +676,11 @@ export function getWorkspace() {
 // Keep track of real-time state
 export function isRealTimeRunning() {
   return workspace?.isRealTimeRunning || false;
+}
+
+export function resetWorkspace() {
+  if (workspace) {
+    workspace.dispose();
+    workspace = null;
+  }
 }

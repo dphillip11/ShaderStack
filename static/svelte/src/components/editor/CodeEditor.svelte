@@ -1,6 +1,6 @@
 <script>
-    import { writable, derived } from "svelte/store";
-  import { activeScript, displayedInjectedCode, scriptRuntimeData, currentScriptRuntime } from "../../stores/activeShader";
+  import { derived } from "svelte/store";
+  import { activeScript, scriptRuntimeData, currentScriptRuntime } from "../../stores/activeShader";
 
   let showInjectedCode = false;
   let textareaElement;
@@ -56,7 +56,6 @@
     errors.forEach(error => {
       if (error.line > 0 && error.line <= lines.length) {
         // Add error indication - could be enhanced with line highlighting
-        console.log(`Error at line ${error.line}: ${error.message}`);
       }
     });
   }
@@ -94,6 +93,7 @@
         </div>
       {/if}
       
+      {#if $activeScript.code}
       <textarea 
         bind:this={textareaElement}
         class="code-editor"
@@ -102,6 +102,7 @@
         spellcheck="false" 
         aria-label="WGSL code editor"
         placeholder="Enter your WGSL shader code here..."></textarea>
+      {/if}
     </div>
     
     <div class="injected-section">

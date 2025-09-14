@@ -8,7 +8,7 @@
   import Tags from './Tags.svelte';
   import { user } from '../stores/user';
   import { derived } from 'svelte/store';
-  import { initWorkspace } from '../adapters/workspaceAdapter.js';
+  import { initWorkspace, getWorkspace } from '../adapters/workspaceAdapter.js';
   import { isInitializing, addConsoleMessage } from '../stores/editor.js';
   import { onMount } from 'svelte';
 
@@ -30,6 +30,23 @@
       isInitializing.set(false);
     }
   });
+
+  // Re-initialize workspace if we switch shaders while staying on the editor page
+  $: (async () => {
+    if (!$activeShader) return;
+    const ws = getWorkspace();
+    if (!ws || !ws.isInitialized) {
+      try {
+        isInitializing.set(true);
+        await initWorkspace();
+        addConsoleMessage('WebGPU workspace re-initialized', 'info');
+      } catch (error) {
+        addConsoleMessage(`Failed to re-initialize WebGPU: ${error.message}`, 'error');
+      } finally {
+        isInitializing.set(false);
+      }
+    }
+  })();
   
 </script>
 {#if $activeShader}
