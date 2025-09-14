@@ -1,10 +1,6 @@
 import { writable, get } from 'svelte/store';
 
-export const isRunning = writable(false);
 export const isInitializing = writable(false);
-export const webgpuReady = writable(false);
-export const lastError = writable(null);
-
 export const consoleMessages = writable([]);
 
 // Append console message

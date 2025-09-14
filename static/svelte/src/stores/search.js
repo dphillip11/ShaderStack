@@ -20,12 +20,10 @@ export function clearFilters() {
 
 export function setQuery(query) {
   filters.update(f => ({ ...f, query }));
-  console.log("Filters updated:", get(filters));
 }
 
 export function filterByUserId(user_id) {
     filters.update(f => ({ ...f, user_id }));
-    console.log("Filters updated:", get(filters));
 }
 
 export function removeUserIdFilter() {

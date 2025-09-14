@@ -52,19 +52,6 @@ export const currentScriptRuntime = derived(
     }
 );
 
-// For debug UI: show injected part + user code for the active script
-export const displayedInjectedCode = derived(
-    [currentScriptRuntime, activeScript],
-    ([$runtime, $activeScript]) => {
-        if (!$activeScript) return '';
-        const injected = $runtime?.injectedCode || '';
-        const userCode = $activeScript.code || '';
-        if (!injected && !userCode) return '';
-        // Only injected part is stored; concatenate for preview
-        return `${injected}\n// --- user code ---\n${userCode}`.trim();
-    }
-);
-
 export function NewShader(){
     return {
         id: null,
@@ -102,7 +89,6 @@ export function RemoveTag(tagString) {
 }
 
 export function addNewScript() {
-    console.log("Adding new script", get(activeShader));
     const currentShader = get(activeShader);
     if (!currentShader) return;
     

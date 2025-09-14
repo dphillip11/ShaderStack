@@ -21,7 +21,6 @@
     }
 
     function toggleTag(tag) {
-        console.log('toggleTag', tag);
         if (tags.includes(tag)) {
             onRemove(tag);
         } else {

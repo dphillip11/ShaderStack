@@ -7,7 +7,6 @@
   
   function onInput(e) {
     setQuery( e.target.value );
-    console.log(e);
   }
 </script>
 

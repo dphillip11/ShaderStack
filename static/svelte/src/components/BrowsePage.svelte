@@ -39,7 +39,6 @@
       const result = await dataManager.deleteShader(shaderToDelete.id);
       
       if (result.success) {
-        console.log(`Shader "${shaderToDelete.name}" deleted successfully`);
         hideDeleteDialog();
       } else {
         console.error('Delete failed:', result.error);

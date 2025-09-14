@@ -6,7 +6,6 @@
   let modal;
 
   function openLogin(){ 
-    console.log('AuthBar openLogin called, modal:', modal);
     if (modal && typeof modal.open === 'function') {
       modal.open(); 
     } else {

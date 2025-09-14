@@ -90,12 +90,11 @@ class ScriptEngine {
         }
       }
 
-      console.log(`Creating script ${scriptId} with available buffers:`, Array.from(availableBuffers.keys()));
       // Detect if user code already defines a vertex shader
       const hasVertex = /@vertex|fn\s+vs_main\s*\(/.test(code);
       const injectedCode = ComputeInjectedCode(availableBuffers, !hasVertex);
       const fullCode = `${injectedCode}\n${code}`;
-  const shaderModule = CompileScript(fullCode, this.device);
+      const shaderModule = CompileScript(fullCode, this.device);
 
       // Extract async compilation info errors
       let extractedErrors = [];
@@ -232,7 +231,6 @@ class ScriptEngine {
         sourceCode: code
       });
 
-      console.log(`Script ${scriptId} compiled successfully`);
       return true;
     } catch (error) {
       console.error(`Script ${scriptId} compilation failed:`, error.message);
@@ -362,13 +360,11 @@ class ScriptEngine {
         if (shaderScript.id !== scriptId) {
           const compiledScript = this.scripts.get(shaderScript.id);
           if (compiledScript && compiledScript.texture) {
-            console.log(`Script ${scriptId}: binding buffer${shaderScript.id} to actual texture`);
             bindGroupEntries.push(
               { binding: bindingIndex, resource: compiledScript.texture.createView() },
               { binding: bindingIndex + 1, resource: script.sampler }
             );
           } else {
-            console.log(`Script ${scriptId}: binding buffer${shaderScript.id} to placeholder`);
             // Use placeholder if script not compiled yet
             bindGroupEntries.push(
               { binding: bindingIndex, resource: script.texture.createView() },
@@ -404,7 +400,6 @@ class WebGPUWorkspace {
 
   async initialize() {
     try {
-      console.log('Initializing WebGPU workspace...');
 
       if (!navigator.gpu) {
         throw new Error('WebGPU not supported in this browser');
@@ -436,7 +431,6 @@ class WebGPUWorkspace {
       this.setupMouseTracking();
       this.isInitialized = true;
 
-      console.log('WebGPU workspace initialized successfully');
     } catch (error) {
       console.error(`Initialization failed: ${error.message}`);
       throw error;
@@ -463,26 +457,6 @@ class WebGPUWorkspace {
     }
   }
 
-  async runCurrentScript() {
-    try {
-      const shader = get(activeShader);
-      const script = get(activeScript);
-      
-      if (!shader || !script) {
-        return; // Silently return if no script to run
-      }
-
-      // Back-compat: run active only
-      await this.scriptEngine.ensureCompiled(script.id, script.code, script.buffer);
-      await this.scriptEngine.executeScript(script.id);
-      await this.updatePreview(script.id);
-      this.scriptEngine.incrementFrame();
-    } catch (error) {
-      console.error(`Execution failed: ${error.message}`);
-      throw error;
-    }
-  }
-
   async runAllScripts() {
     try {
       const shader = get(activeShader);
@@ -501,7 +475,6 @@ class WebGPUWorkspace {
       // Execute producers before consumers (simple heuristic: by id asc)
       const ordered = [...shader.shader_scripts].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
       for (const s of ordered) {
-        console.log(`Executing script ${s.id}`);
         await this.scriptEngine.executeScript(s.id);
         // Rebuild all bind groups after each script so consumers can sample the fresh texture
         await this.scriptEngine.rebuildAllBindGroups();
@@ -609,7 +582,6 @@ class WebGPUWorkspace {
     if (this.isRealTimeRunning) return;
     
     this.isRealTimeRunning = true;
-    console.log('Starting real-time mode...');
     
     const animate = async () => {
       if (!this.isRealTimeRunning) return;
@@ -632,7 +604,6 @@ class WebGPUWorkspace {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
-    console.log('Stopped real-time mode');
   }
 
   deleteScript(scriptId) {

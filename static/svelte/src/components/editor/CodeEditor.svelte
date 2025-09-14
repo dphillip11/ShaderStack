@@ -1,6 +1,6 @@
 <script>
     import { writable, derived } from "svelte/store";
-  import { activeScript, displayedInjectedCode, scriptRuntimeData } from "../../stores/activeShader";
+  import { activeScript, displayedInjectedCode, scriptRuntimeData, currentScriptRuntime } from "../../stores/activeShader";
 
   let showInjectedCode = false;
   let textareaElement;
@@ -115,7 +115,7 @@
       
       {#if showInjectedCode}
         <div class="injected-code-container">
-          <pre class="injected-code">{$displayedInjectedCode || '// No injected code available'}</pre>
+          <pre class="injected-code">{$currentScriptRuntime?.injectedCode || '// No injected code available'}</pre>
         </div>
       {/if}
     </div>

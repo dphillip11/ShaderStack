@@ -20,7 +20,6 @@ async function loadShadersRemote(){
   const params = new URLSearchParams(get(filters));
   const queryString = params.toString();
   const url = `/api/shaders${queryString ? '?' + queryString : ''}`;
-  console.log("Fetching shaders from:", url);
   shaders.set(await apiGet(url));
 }
 
@@ -66,7 +65,6 @@ async function deleteShaderRemote(shaderID){
 }
 
 export function LoadShaders() {
-  console.log("Loading shaders...", get(isOffline));
   if (get(isOffline)) {
     loadShadersLocal();
   } else {
