@@ -17,20 +17,11 @@ type BufferSpec struct {
 	Height int    `json:"height"`
 }
 
-type ComputeSpec struct {
-	WorkgroupSize struct {
-		X int `json:"x"`
-		Y int `json:"y"`
-		Z int `json:"z"`
-	} `json:"workgroupSize"`
-}
-
 type ShaderScript struct {
-	ID      int          `json:"id"`
-	Code    string       `json:"code"`
-	Buffer  BufferSpec   `json:"buffer"`
-	Kind    string       `json:"kind,omitempty"` // 'fragment' (default) or 'compute'
-	Compute *ComputeSpec `json:"compute,omitempty"`
+	ID     int        `json:"id"`
+	Code   string     `json:"code"`
+	Buffer BufferSpec `json:"buffer"`
+	Kind   string     `json:"kind,omitempty"` // 'fragment' (default) or 'compute'
 }
 
 type Shader struct {
@@ -38,6 +29,7 @@ type Shader struct {
 	UserID        int            `json:"user_id"`
 	Name          string         `json:"name"`
 	Author        string         `json:"author,omitempty"` // Added author field
+	CommonScript  string         `json:"common_script,omitempty"`
 	ShaderScripts []ShaderScript `json:"shader_scripts"`
 	Tags          []Tag          `json:"tags,omitempty"`
 }

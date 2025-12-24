@@ -8,8 +8,6 @@ struct Uniforms {
 }
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
-
-// Auto-injected texture bindings
 `;
 
 export const DEFAULT_VERTEX_SHADER = `
@@ -28,29 +26,57 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<
 //   withVertexShader?: boolean,
 //   kind?: 'fragment' | 'compute',
 //   storageFormat?: string,
+//   bufferWidth?: number,
+//   bufferHeight?: number,
 // }
-export function ComputeInjectedCode(availableBuffers, options = {}) {
-  const { withVertexShader = true, kind = 'fragment', storageFormat = null } = options;
+export function ComputeInjectedCode(availableScripts, options = {}, commonScript) {
+  const { 
+    withVertexShader = true, 
+    kind = 'fragment', 
+    storageFormat = null,
+    bufferWidth = 32,
+    bufferHeight = 32
+  } = options;
   let injectedCode = INJECTED_SCRIPT_TEMPLATE;
 
-  // Add texture bindings for available buffers
+  // inject common script
+  injectedCode += `\n// Common Script\n${commonScript}\n\n// Auto-injected texture bindings\n`;
+
+  // Add bindings for available scripts (texture for fragment, storage buffer for compute)
   let bindings = '';
   let bindingIndex = 1;
 
-  for (const [scriptId, _bufferSpec] of availableBuffers) {
-    bindings += `@group(0) @binding(${bindingIndex}) var buffer${scriptId}: texture_2d<f32>;\n`;
-    bindings += `@group(0) @binding(${bindingIndex + 1}) var buffer${scriptId}_sampler: sampler;\n`;
-    bindingIndex += 2;
+  console.log(`ComputeInjectedCode for ${kind} shader, available scripts:`, Array.from(availableScripts.keys()));
+
+  for (const [scriptId, scriptInfo] of availableScripts) {
+    const scriptKind = scriptInfo.kind || 'fragment';
+    console.log(`  Script ${scriptId}: kind=${scriptKind}, binding=${bindingIndex}`);
+    
+    if (scriptKind === 'compute') {
+      // Storage buffer binding for compute scripts (read-write access)
+      const width = scriptInfo.buffer?.width || 32;
+      const height = scriptInfo.buffer?.height || 32;
+      bindings += `@group(0) @binding(${bindingIndex}) var<storage, read_write> buffer${scriptId}: array<vec4<f32>, ${width * height}>;\n`;
+      bindingIndex += 1;
+    } else {
+      // Texture bindings for fragment scripts
+      bindings += `@group(0) @binding(${bindingIndex}) var buffer${scriptId}: texture_2d<f32>;\n`;
+      bindings += `@group(0) @binding(${bindingIndex + 1}) var buffer${scriptId}_sampler: sampler;\n`;
+      bindingIndex += 2;
+    }
   }
 
-  // For compute, add the storage texture binding for output
+  // For compute shaders, always use storage buffer (better performance than storage textures)
   if (kind === 'compute') {
-    const fmt = storageFormat || 'rgba8unorm';
-    bindings += `@group(0) @binding(${bindingIndex}) var outTex: texture_storage_2d<${fmt}, write>;\n`;
+    // Create a 2D storage buffer using width and height
+    bindings += `// 2D Storage Buffer: ${bufferWidth}x${bufferHeight}\n`;
+    bindings += `@group(0) @binding(${bindingIndex}) var<storage, read_write> outBuffer: array<vec4<f32>, ${bufferWidth * bufferHeight}>;\n`;
   }
 
   injectedCode += bindings;
   injectedCode += '\n// User code begins here\n';
+
+  console.log(`Generated injected code:\n${injectedCode}`);
 
   if (withVertexShader && kind !== 'compute') {
     injectedCode = DEFAULT_VERTEX_SHADER + '\n' + injectedCode;

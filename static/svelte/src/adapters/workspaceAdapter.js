@@ -46,7 +46,7 @@ class ScriptEngine {
     this.startTime = performance.now();
   }
 
-  needsRecompile(scriptId, userCode, availableBuffers) {
+  needsRecompile(scriptId, userCode, availableScripts) {
     const existing = this.scripts.get(scriptId);
     if (!existing) return true;
     const currentShader = get(activeShader);
@@ -54,7 +54,7 @@ class ScriptEngine {
     // Recompile if shader changed, source changed, or buffer topology changed
     if (existing._shaderId !== shaderId) return true;
     if (existing.sourceCode !== userCode) return true;
-    if ((existing._bufferCount ?? 0) !== availableBuffers.size) return true;
+    if ((existing._bufferCount ?? 0) !== availableScripts.size) return true;
     // Also recompile if output buffer spec changed
     const bs = existing.bufferSpec || {};
     const curScript = (get(activeShader)?.shader_scripts || []).find(s => s.id === scriptId) || {};
@@ -69,15 +69,15 @@ class ScriptEngine {
   }
 
   async ensureCompiled(scriptId, userCode, bufferSpec) {
-  // Build available buffers map like in createScript
+  // Build available scripts map like in createScript
     const shader = get(activeShader);
-    const availableBuffers = new Map();
+    const availableScripts = new Map();
     if (shader && shader.shader_scripts) {
       for (const s of shader.shader_scripts) {
-        if (s.id !== scriptId) availableBuffers.set(s.id, s.buffer);
+        if (s.id !== scriptId) availableScripts.set(s.id, s);
       }
     }
-    if (this.needsRecompile(scriptId, userCode, availableBuffers)) {
+    if (this.needsRecompile(scriptId, userCode, availableScripts)) {
       await this.createScript(scriptId, userCode, bufferSpec);
       await this.rebuildAllBindGroups();
     }
@@ -88,27 +88,32 @@ class ScriptEngine {
       // Reset runtime errors on (re)compile start
       updateScriptRuntime(scriptId, { errors: [] });
 
-      const availableBuffers = new Map();
+      const availableScripts = new Map();
       
-      // Get available buffers from all scripts in the current shader
+      // Get available scripts from all scripts in the current shader
       const shader = get(activeShader);
       if (shader && shader.shader_scripts) {
         for (const script of shader.shader_scripts) {
           if (script.id !== scriptId) {
-            availableBuffers.set(script.id, script.buffer);
+            availableScripts.set(script.id, script);
           }
         }
       }
+
+      console.log(`Creating script ${scriptId}, available scripts:`, Array.from(availableScripts.keys()));
 
       const scriptMeta = (get(activeShader)?.shader_scripts || []).find(s => s.id === scriptId) || {};
       const kind = scriptMeta.kind || 'fragment';
       // Detect if user code already defines a vertex shader when fragment
       const hasVertex = kind === 'fragment' && /@vertex|fn\s+vs_main\s*\(/.test(code);
-      const injectedCode = ComputeInjectedCode(availableBuffers, {
+      debugger;
+      const injectedCode = ComputeInjectedCode(availableScripts, {
         withVertexShader: !hasVertex,
         kind,
-        storageFormat: bufferSpec.format || 'rgba8unorm'
-      });
+        storageFormat: bufferSpec.format || 'rgba8unorm',
+        bufferWidth: bufferSpec.width || 512,
+        bufferHeight: bufferSpec.height || 512
+      }, shader.common_script || '\n');
       const fullCode = `${injectedCode}\n${code}`;
       const shaderModule = CompileScript(fullCode, this.device);
 
@@ -140,27 +145,41 @@ class ScriptEngine {
       ];
 
       let bindingIndex = 1;
-      for (const [id, bufferData] of availableBuffers) {
-        bindGroupLayoutEntries.push(
-          {
+      for (const [id, scriptInfo] of availableScripts) {
+        const scriptKind = scriptInfo.kind || 'fragment';
+        if (scriptKind === 'compute') {
+          // Storage buffer binding for compute scripts
+          bindGroupLayoutEntries.push({
             binding: bindingIndex,
             visibility: kind === 'compute' ? GPUShaderStage.COMPUTE : GPUShaderStage.FRAGMENT,
-            texture: { sampleType: 'float' }
-          },
-          {
-            binding: bindingIndex + 1,
-            visibility: kind === 'compute' ? GPUShaderStage.COMPUTE : GPUShaderStage.FRAGMENT,
-            sampler: {}
-          }
-        );
-        bindingIndex += 2;
+            buffer: { type: 'storage' }
+          });
+          bindingIndex += 1;
+        } else {
+          // Texture bindings for fragment scripts
+          bindGroupLayoutEntries.push(
+            {
+              binding: bindingIndex,
+              visibility: kind === 'compute' ? GPUShaderStage.COMPUTE : GPUShaderStage.FRAGMENT,
+              texture: { sampleType: 'float' }
+            },
+            {
+              binding: bindingIndex + 1,
+              visibility: kind === 'compute' ? GPUShaderStage.COMPUTE : GPUShaderStage.FRAGMENT,
+              sampler: {}
+            }
+          );
+          bindingIndex += 2;
+        }
       }
-      // For compute, add storage texture binding for output
+      // For compute, add storage buffer binding for output
       if (kind === 'compute') {
         bindGroupLayoutEntries.push({
           binding: bindingIndex,
           visibility: GPUShaderStage.COMPUTE,
-          storageTexture: { access: 'write-only', format: bufferSpec.format || 'rgba8unorm' }
+          buffer: { 
+            type: 'storage'
+          }
         });
       }
 
@@ -216,6 +235,19 @@ class ScriptEngine {
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
       });
 
+      // Create storage buffer for compute shaders
+      let storageBuffer = null;
+      if (kind === 'compute') {
+        const width = bufferSpec.width || 512;
+        const height = bufferSpec.height || 512;
+        const bufferSize = width * height * 4 * 4; // vec4<f32> = 16 bytes
+        storageBuffer = this.device.createBuffer({
+          label: `Script ${scriptId} Storage Buffer`,
+          size: bufferSize,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+        });
+      }
+
       const sampler = this.device.createSampler({
         magFilter: 'linear',
         minFilter: 'linear',
@@ -228,26 +260,49 @@ class ScriptEngine {
       ];
 
       bindingIndex = 1;
-      // Add texture bindings for scripts that are actually compiled
-  for (const [id, bufferData] of availableBuffers) {
+      // Add bindings for scripts that are actually compiled
+      for (const [id, scriptInfo] of availableScripts) {
         const compiledScript = this.scripts.get(id);
-        if (compiledScript && compiledScript.texture) {
-          bindGroupEntries.push(
-            { binding: bindingIndex, resource: compiledScript.texture.createView() },
-            { binding: bindingIndex + 1, resource: sampler }
-          );
+        const scriptKind = scriptInfo.kind || 'fragment';
+        
+        if (scriptKind === 'compute') {
+          // Storage buffer binding for compute scripts
+          if (compiledScript && compiledScript.storageBuffer) {
+            bindGroupEntries.push({
+              binding: bindingIndex,
+              resource: { buffer: compiledScript.storageBuffer }
+            });
+          } else {
+            // Create placeholder storage buffer if script not compiled yet
+            const placeholderBuffer = this.device.createBuffer({
+              size: 4 * 4 * 4, // minimal vec4<f32>
+              usage: GPUBufferUsage.STORAGE
+            });
+            bindGroupEntries.push({
+              binding: bindingIndex,
+              resource: { buffer: placeholderBuffer }
+            });
+          }
+          bindingIndex += 1;
         } else {
-          // Create placeholder bindings for scripts that aren't compiled yet
-          // We'll need to rebuild this bind group when those scripts are compiled
-          bindGroupEntries.push(
-            { binding: bindingIndex, resource: texture.createView() }, // Use own texture as placeholder
-            { binding: bindingIndex + 1, resource: sampler }
-          );
+          // Texture bindings for fragment scripts
+          if (compiledScript && compiledScript.texture) {
+            bindGroupEntries.push(
+              { binding: bindingIndex, resource: compiledScript.texture.createView() },
+              { binding: bindingIndex + 1, resource: sampler }
+            );
+          } else {
+            // Create placeholder bindings for scripts that aren't compiled yet
+            bindGroupEntries.push(
+              { binding: bindingIndex, resource: texture.createView() },
+              { binding: bindingIndex + 1, resource: sampler }
+            );
+          }
+          bindingIndex += 2;
         }
-        bindingIndex += 2;
       }
-      if (kind === 'compute') {
-        bindGroupEntries.push({ binding: bindingIndex, resource: texture.createView() });
+      if (kind === 'compute' && storageBuffer) {
+        bindGroupEntries.push({ binding: bindingIndex, resource: { buffer: storageBuffer } });
       }
 
       const bindGroup = this.device.createBindGroup({
@@ -263,14 +318,15 @@ class ScriptEngine {
         kind,
         compute: scriptMeta.compute || null,
         texture,
+        storageBuffer,
         uniformBuffer,
         bindGroup,
         bindGroupLayout,
         sampler,
         code: fullCode,
-  sourceCode: code,
-  _shaderId: get(activeShader)?.id ?? '__no_shader__',
-  _bufferCount: availableBuffers.size
+        sourceCode: code,
+        _shaderId: get(activeShader)?.id ?? '__no_shader__',
+        _bufferCount: availableScripts.size
       });
 
       return true;
@@ -309,13 +365,9 @@ class ScriptEngine {
         const pass = commandEncoder.beginComputePass({ label: `Script ${scriptId} Compute Pass` });
         pass.setPipeline(script.computePipeline);
         pass.setBindGroup(0, script.bindGroup);
-        const wg = script.compute?.workgroupSize || { x: 16, y: 16, z: 1 };
         const width = script.bufferSpec.width || 512;
         const height = script.bufferSpec.height || 512;
-        const groupsX = Math.ceil(width / wg.x);
-        const groupsY = Math.ceil(height / wg.y);
-        const groupsZ = Math.max(1, wg.z || 1);
-        pass.dispatchWorkgroups(groupsX, groupsY, groupsZ);
+        pass.dispatchWorkgroups(width, height, 1);
         pass.end();
       } else {
         const renderPass = commandEncoder.beginRenderPass({
@@ -389,6 +441,7 @@ class ScriptEngine {
     if (script) {
       script.texture?.destroy();
       script.uniformBuffer?.destroy();
+      script.storageBuffer?.destroy();
       this.scripts.delete(scriptId);
     }
   }
@@ -407,7 +460,7 @@ class ScriptEngine {
       { binding: 0, resource: { buffer: script.uniformBuffer } }
     ];
 
-    // Get available buffers from the current shader
+    // Get available scripts from the current shader
     const shader = get(activeShader);
     let bindingIndex = 1;
     
@@ -415,26 +468,50 @@ class ScriptEngine {
       for (const shaderScript of shader.shader_scripts) {
         if (shaderScript.id !== scriptId) {
           const compiledScript = this.scripts.get(shaderScript.id);
-          if (compiledScript && compiledScript.texture) {
-            bindGroupEntries.push(
-              { binding: bindingIndex, resource: compiledScript.texture.createView() },
-              { binding: bindingIndex + 1, resource: script.sampler }
-            );
+          const scriptKind = shaderScript.kind || 'fragment';
+          
+          if (scriptKind === 'compute') {
+            // Storage buffer binding for compute scripts
+            if (compiledScript && compiledScript.storageBuffer) {
+              bindGroupEntries.push({
+                binding: bindingIndex,
+                resource: { buffer: compiledScript.storageBuffer }
+              });
+            } else {
+              // Create placeholder storage buffer if script not compiled yet
+              const placeholderBuffer = this.device.createBuffer({
+                size: 4 * 4 * 4, // minimal vec4<f32>
+                usage: GPUBufferUsage.STORAGE
+              });
+              bindGroupEntries.push({
+                binding: bindingIndex,
+                resource: { buffer: placeholderBuffer }
+              });
+            }
+            bindingIndex += 1;
           } else {
-            // Use placeholder if script not compiled yet
-            bindGroupEntries.push(
-              { binding: bindingIndex, resource: script.texture.createView() },
-              { binding: bindingIndex + 1, resource: script.sampler }
-            );
+            // Texture bindings for fragment scripts
+            if (compiledScript && compiledScript.texture) {
+              bindGroupEntries.push(
+                { binding: bindingIndex, resource: compiledScript.texture.createView() },
+                { binding: bindingIndex + 1, resource: script.sampler }
+              );
+            } else {
+              // Use placeholder if script not compiled yet
+              bindGroupEntries.push(
+                { binding: bindingIndex, resource: script.texture.createView() },
+                { binding: bindingIndex + 1, resource: script.sampler }
+              );
+            }
+            bindingIndex += 2;
           }
-          bindingIndex += 2;
         }
       }
     }
 
-    // For compute, append storage texture binding for output at the end
-    if (script.kind === 'compute') {
-      bindGroupEntries.push({ binding: bindingIndex, resource: script.texture.createView() });
+    // For compute, append storage buffer binding for output at the end
+    if (script.kind === 'compute' && script.storageBuffer) {
+      bindGroupEntries.push({ binding: bindingIndex, resource: { buffer: script.storageBuffer } });
     }
 
     script.bindGroup = this.device.createBindGroup({
@@ -448,6 +525,7 @@ class ScriptEngine {
     for (const [id, s] of this.scripts) {
       try { s.texture?.destroy(); } catch {}
       try { s.uniformBuffer?.destroy(); } catch {}
+      try { s.storageBuffer?.destroy(); } catch {}
     }
     this.scripts.clear();
   }

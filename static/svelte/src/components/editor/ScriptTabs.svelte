@@ -1,14 +1,34 @@
 <script>
-  import { addNewScript, deleteScript, activeShader, activeScriptIndex, activeScript } from '../../stores/activeShader.js';
+  import { addNewScript, deleteScript, activeShader, activeScriptIndex, activeScript, isEditingCommonScript } from '../../stores/activeShader.js';
   import BufferControls from './BufferControls.svelte';
+
+  function setActiveTab(index) {
+    if (index === -1) {
+      isEditingCommonScript.set(true);
+    } else {
+      isEditingCommonScript.set(false);
+      activeScriptIndex.set(index);
+    }
+  }
 </script>
 
 <div class="script-tabs-container">
   <div class="script-tabs">
-    {#if $activeShader && $activeShader.shader_scripts && $activeShader.shader_scripts.length > 1}
-    {#each $activeShader?.shader_scripts as sc, index}
+    <!-- Common Script Tab -->
+    <div class="tab-wrapper">
+      <button class="tab-btn {$isEditingCommonScript ? 'active':''}" on:click={() => setActiveTab(-1)}>
+        <span class="tab-content">
+          Common
+          <span class="buffer-indicator">Shared script</span>
+        </span>
+      </button>
+    </div>
+
+    <!-- Regular Script Tabs -->
+    {#if $activeShader && $activeShader.shader_scripts}
+    {#each $activeShader.shader_scripts as sc, index}
       <div class="tab-wrapper">
-        <button class="tab-btn {$activeScriptIndex === index ? 'active':''}" on:click={() => activeScriptIndex.set(index)}>
+        <button class="tab-btn {$activeScriptIndex === index && !$isEditingCommonScript ? 'active':''}" on:click={() => setActiveTab(index)}>
           <span class="tab-content">
             Script {sc.id}
             <span class="buffer-indicator">{sc.buffer?.width || 512}×{sc.buffer?.height || 512}</span>
@@ -16,7 +36,14 @@
           {#if $activeShader.shader_scripts.length > 1}
             <button 
               class="tab-close" 
-              on:click={(e) => deleteScript(index)}
+              on:click={(e) => {
+                e.stopPropagation();
+                deleteScript(index);
+                // If we deleted the active script, switch to common script
+                if ($activeScriptIndex === index) {
+                  setActiveTab(-1);
+                }
+              }}
               title="Delete script"
               aria-label="Delete script {index}"
             >×</button>
@@ -28,7 +55,8 @@
     <button class="tab-btn add" on:click={addNewScript} title="Add script">+</button>
   </div>
   
-  {#if $activeScript}
+  <!-- Show BufferControls only for regular scripts, not common script -->
+  {#if $activeScript && !$isEditingCommonScript}
     {#key $activeScript.id}
       <BufferControls 
         buffer={{ ...($activeScript.buffer || { format: 'rgba8unorm', width: 512, height: 512 }) }}

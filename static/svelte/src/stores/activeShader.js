@@ -5,10 +5,22 @@ import { DEFAULT_SCRIPT_0, DEFAULT_SCRIPT_1, DEFAULT_COMPUTE_SCRIPT } from "../c
 
 export const activeShader = writable(null);
 export const activeScriptIndex = writable(0);
+export const isEditingCommonScript = writable(false);
+
 export const activeScript = derived(
-    [activeShader, activeScriptIndex],
-    ([shader, scriptIndex]) => {
+    [activeShader, activeScriptIndex, isEditingCommonScript],
+    ([shader, scriptIndex, editingCommon]) => {
         if (!shader) return null;
+        
+        // If editing common script, return a special object
+        if (editingCommon) {
+            return {
+                id: 'common',
+                code: shader.common_script || '',
+                isCommonScript: true
+            };
+        }
+        
         if (!shader.shader_scripts) return null;
         if (shader.shader_scripts.length <= scriptIndex) return null;
         return shader.shader_scripts[scriptIndex];
@@ -58,7 +70,8 @@ export function NewShader(){
         name: 'New Shader',
         description: '',
         tags: [],
-    shader_scripts: [DEFAULT_SCRIPT_0, DEFAULT_SCRIPT_1],
+        common_script: '',
+        shader_scripts: [DEFAULT_SCRIPT_0, DEFAULT_SCRIPT_1],
         user_id: get(user)?.user_id,
     };
 }

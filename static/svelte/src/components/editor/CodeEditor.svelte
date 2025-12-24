@@ -1,11 +1,27 @@
 <script>
   import { derived } from "svelte/store";
-  import { activeScript, scriptRuntimeData, currentScriptRuntime } from "../../stores/activeShader";
+  import { activeScript, activeShader, scriptRuntimeData, currentScriptRuntime } from "../../stores/activeShader";
 
   let showInjectedCode = false;
   let textareaElement;
   let localCode = derived(activeScript, $activeScript => $activeScript ? decodeCode($activeScript.code) : '');
   let errors = [];
+
+  // Handle code updates for both regular scripts and common script
+  function updateCode(newCode) {
+    if (!$activeScript) return;
+    
+    if ($activeScript.isCommonScript) {
+      // Update common script
+      activeShader.update(shader => {
+        if (!shader) return shader;
+        return { ...shader, common_script: newCode };
+      });
+    } else {
+      // Update regular script - this will be handled by the existing binding
+      // The binding in the textarea will handle this case automatically
+    }
+  }
 
   // Function to decode JSON-encoded strings
   function decodeCode(rawCode) {
@@ -74,8 +90,11 @@
   {#if activeScript}
     <div class="code-section">
       <div class="section-header">
-        <h4>Your Shader Code</h4>
+        <h4>{$activeScript.isCommonScript ? 'Common Shader Code' : 'Your Shader Code'}</h4>
         <div class="editor-hints">
+          {#if $activeScript.isCommonScript}
+            <span class="common-indicator">Shared across all scripts</span>
+          {/if}
           {#if errors.length > 0}
             <span class="error-count">{errors.length} error{errors.length > 1 ? 's' : ''}</span>
           {/if}
@@ -93,15 +112,31 @@
         </div>
       {/if}
       
-      {#if $activeScript.code}
+      {#if $activeScript.code !== undefined}
       <textarea 
         bind:this={textareaElement}
         class="code-editor"
         class:has-errors={errors.length > 0}
-        bind:value={$activeScript.code} 
+        value={$activeScript.code}
+        on:input={(e) => {
+          if ($activeScript.isCommonScript) {
+            updateCode(e.target.value);
+          } else {
+            // For regular scripts, update directly through the store
+            activeShader.update(shader => {
+              if (!shader || !shader.shader_scripts) return shader;
+              const scripts = [...shader.shader_scripts];
+              const scriptIndex = scripts.findIndex(s => s.id === $activeScript.id);
+              if (scriptIndex >= 0) {
+                scripts[scriptIndex] = { ...scripts[scriptIndex], code: e.target.value };
+              }
+              return { ...shader, shader_scripts: scripts };
+            });
+          }
+        }}
         spellcheck="false" 
         aria-label="WGSL code editor"
-        placeholder="Enter your WGSL shader code here..."></textarea>
+        placeholder={$activeScript.isCommonScript ? "Enter common shader code (structs, functions, constants)..." : "Enter your WGSL shader code here..."}></textarea>
       {/if}
     </div>
     
@@ -177,6 +212,15 @@
     padding: 0.25rem 0.5rem;
     border-radius: 3px;
     font-weight: 600;
+  }
+
+  .common-indicator {
+    font-size: 0.75rem;
+    color: #2b6cb0;
+    background: #bee3f8;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+    font-weight: 500;
   }
 
   .error-summary {
