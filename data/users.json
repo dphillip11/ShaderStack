@@ -5,6 +5,11 @@
     "password": "password123"
   },
   {
+    "id": 6,
+    "username": "daniel1",
+    "password": "password"
+  },
+  {
     "id": 2,
     "username": "user",
     "password": "userpass"
@@ -18,5 +23,10 @@
     "id": 4,
     "username": "shaderdev",
     "password": "webgpu2024"
+  },
+  {
+    "id": 5,
+    "username": "daniel",
+    "password": "password"
   }
 ]

@@ -1,5 +1,135 @@
 [
   {
+    "id": 7,
+    "user_id": 5,
+    "name": "Compute Tiled Blur Demo",
+    "author": "daniel",
+    "shader_scripts": [
+      {
+        "id": 0,
+        "code": "@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n  let uv = coord.xy / u.resolution;\n  // Procedural pattern: checker + time-based ripple\n  let x_check = fract(uv.x * 8.0) \u003e 0.5;\n  let y_check = fract(uv.y * 8.0) \u003e 0.5;\n  let checker = select(0.0, 1.0, x_check != y_check);\n  let ripple = 0.5 + 0.5 * sin(20.0 * (uv.x + uv.y) + u.time * 2.0);\n  let base = mix(vec3\u003cf32\u003e(0.1,0.2,0.7), vec3\u003cf32\u003e(0.9,0.6,0.2), ripple);\n  let c = mix(base, vec3\u003cf32\u003e(1.0) - base, checker);\n  return vec4\u003cf32\u003e(c, 1.0);\n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
+        }
+      },
+      {
+        "id": 1,
+        "code": "@compute @workgroup_size(16, 16, 1)\nfn cs_main(\n  @builtin(global_invocation_id) gid: vec3\u003cu32\u003e\n) {\n  if (gid.x \u003e= u32(u.resolution.x) || gid.y \u003e= u32(u.resolution.y)) { return; }\n  \n  let coord = vec2\u003ci32\u003e(i32(gid.x), i32(gid.y));\n  var\u003cfunction\u003e sum = vec4\u003cf32\u003e(0.0);\n  \n  // Simple 3x3 blur\n  for (var\u003cfunction\u003e dy = -1; dy \u003c= 1; dy++) {\n    for (var\u003cfunction\u003e dx = -1; dx \u003c= 1; dx++) {\n      let sampleCoord = coord + vec2\u003ci32\u003e(dx, dy);\n      let clampedCoord = vec2\u003ci32\u003e(\n        clamp(sampleCoord.x, 0, i32(u.resolution.x) - 1),\n        clamp(sampleCoord.y, 0, i32(u.resolution.y) - 1)\n      );\n      sum = sum + textureLoad(buffer0, clampedCoord, 0);\n    }\n  }\n  \n  let blurred = sum / 9.0;\n  textureStore(outTex, coord, blurred);\n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
+        },
+        "kind": "compute"
+      }
+    ],
+    "tags": [
+      {
+        "id": 3,
+        "name": "compute"
+      },
+      {
+        "id": 1,
+        "name": "fragment"
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "user_id": 5,
+    "name": "Ball Physics Simulation",
+    "author": "daniel",
+    "common_script": "const NUM_BALLS = 2000;\nconst BALL_RADIUS = 0.01;\nconst DT = 0.016; // 60 FPS\n\n// Simple hash function for initialization\nfn hash(p: vec2\u003cf32\u003e) -\u003e f32 {\n  let p3 = fract(vec3\u003cf32\u003e(p.xyx) * 0.1031);\n  let p3_dot = dot(p3, vec3\u003cf32\u003e(p3.yzx) + 33.333);\n  return fract((p3.x + p3.y) * p3_dot);\n}\n\nfn initBall(index: u32) -\u003e vec4\u003cf32\u003e {\nlet velSeed1 = vec2\u003cf32\u003e(f32(index), 987.654);\nlet velSeed2 = vec2\u003cf32\u003e(f32(index) + 321.0, 654.321);\nlet velocity = vec2\u003cf32\u003e(\n      (hash(velSeed1) - 0.5) * 0.3,\n      (hash(velSeed2) - 0.5) * 0.1\n);\n return vec4\u003cf32\u003e(vec2\u003cf32\u003e(f32(index)/NUM_BALLS),velocity);\n}\n\n// Check for collision between two balls\nfn ballsColliding(posA: vec2\u003cf32\u003e, posB: vec2\u003cf32\u003e) -\u003e bool {\n  let distance = length(posA - posB);\n  return distance \u003c (BALL_RADIUS * 2.0);\n}",
+    "shader_scripts": [
+      {
+        "id": 0,
+        "code": "const BOUNDARY_FORCE = 0.82;\nconst RESTITUTION = 0.82;\n\nfn isInit() -\u003e bool {\n let importantValue = outBuffer[NUM_BALLS];\n if (importantValue.x \u003c 0.999)\n{\n return false;\n}\nreturn true;\n}\n\nfn readBall(index : u32) -\u003e vec4\u003cf32\u003e\n{\n return outBuffer[index];\n}\n\nfn writeBall(index : u32, data : vec4\u003cf32\u003e)\n{\n outBuffer[index + NUM_BALLS + 1] = data;\n}\n\n@compute @workgroup_size(1, 1, 1)\nfn cs_main(\n  @builtin(global_invocation_id) gid: vec3\u003cu32\u003e\n) {\nif (gid.y \u003e 0)\n{\n return;\n}\n\nlet i = gid.x;\n\nif(i \u003e NUM_BALLS)\n{\n return;\n}\n\nif (!isInit())\n{\n writeBall(i,initBall(i));\n return;\n}\n\nlet ball = readBall(i);\nvar pos = ball.xy;\nvar vel = ball.zw;\n  \n// Apply gravity\nvel.y -= 0.2 * DT;\n  \n// Update position\npos += vel * DT;\n  \n// Handle boundary collisions\nif (pos.x + BALL_RADIUS \u003e 1.0) {\n    vel.x = -abs(vel.x) - (pos.x + BALL_RADIUS - 1.0) * BOUNDARY_FORCE;\n  }\n  if (pos.y + BALL_RADIUS \u003e 1.0) {\n    vel.y = -abs(vel.y) - (pos.y + BALL_RADIUS -1.0) * BOUNDARY_FORCE;\n  }\n  if (pos.x - BALL_RADIUS \u003c 0.0) {\n    vel.x = abs(vel.x) - (pos.x - BALL_RADIUS) * BOUNDARY_FORCE;\n  }\n  if (pos.y - BALL_RADIUS \u003c 0.0) {\n    vel.y = abs(vel.y) - (pos.y - BALL_RADIUS) * BOUNDARY_FORCE;\n  }\n\n  // Resolve collisions using collision matrix from previous frame\n  for (var j = 0u; j \u003c NUM_BALLS; j++) {\n    if (i == j) { continue; }\n    \n    // Check collision matrix for this pair\n    let matrixIndex = min(i, j) * NUM_BALLS + max(i, j);\n    let hasCollision = buffer1[matrixIndex].x \u003e 0.5;\n    \n    if (hasCollision) {\n      let otherBall = readBall(j);\n      let otherPos = otherBall.xy;\n      let otherVel = otherBall.zw;\n      \n      // Separate overlapping balls\n      let delta = pos - otherPos;\n      let distance = length(delta);\n      if (distance \u003c BALL_RADIUS * 2.0 \u0026\u0026 distance \u003e 0.0) {\n        let normal = normalize(delta);\n        let overlap = (BALL_RADIUS * 2.0) - distance;\n        pos += normal * overlap * 0.5;\n        let relVel = vel - otherVel;\n        if (dot(relVel, normal) \u003c 0.0)\n        {\n          vel -= normal * RESTITUTION * dot(relVel, normal);\n        }\n      }\n    }\n  }\n\n  writeBall(i, vec4\u003cf32\u003e(pos, vel)); \n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 2001,
+          "height": 2
+        },
+        "kind": "compute"
+      },
+      {
+        "id": 1,
+        "code": "@compute @workgroup_size(1, 1, 1)\nfn cs_main(\n  @builtin(global_invocation_id) gid: vec3\u003cu32\u003e\n) {\n  let index = gid.x + gid.y * 32u;\n   \n  // Clear collision matrix\n  if (index \u003c NUM_BALLS * NUM_BALLS) {\n    outBuffer[index] = vec4\u003cf32\u003e(0.0);\n  }\n  \n  if (gid.x \u003c NUM_BALLS \u0026\u0026 gid.y == 0u) {\n    let ballIndex = gid.x;\n\n    buffer0[ballIndex] = buffer0[ballIndex + NUM_BALLS + 1];\n  }\n\n  buffer0[NUM_BALLS].x = 1;\n\n  // clear collisions\n outBuffer[gid.x + gid.y * NUM_BALLS].x = 0.0;\n}",
+        "buffer": {
+          "format": "r8unorm",
+          "width": 2000,
+          "height": 2000
+        },
+        "kind": "compute"
+      },
+      {
+        "id": 2,
+        "code": "// Fragment shader - renders balls and detects collisions efficiently\n\n// Get ball color based on index and velocity\nfn getBallColor(ballIndex: u32, velocity: vec2\u003cf32\u003e) -\u003e vec3\u003cf32\u003e {\n  let speed = length(velocity);\n  let hue = f32(ballIndex) / f32(NUM_BALLS) * 6.28;\n  \n  // HSV to RGB with speed-based brightness\n  let brightness = 0.6 + 0.4 * clamp(speed * 200.0, 0.0, 1.0);\n  \n  return vec3\u003cf32\u003e(\n    0.5 + 0.5 * cos(hue) * brightness,\n    0.5 + 0.5 * cos(hue + 2.09) * brightness, \n    0.5 + 0.5 * cos(hue + 4.18) * brightness\n  );\n}\n\n// Store collision between two balls in the collision matrix\nfn storeCollision(indexA: u32, indexB: u32) {\n  if (indexA == indexB) { return; }\n  let firstIndex = min(indexA, indexB);\n  let secondIndex = max(indexA, indexB);\n  // Write collision to the matrix\n  buffer1[firstIndex * NUM_BALLS + secondIndex].x = 1.0;\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n  let uv = coord.xy / u.resolution;\n  \n  // Array to track ball indices that are drawn at this pixel\n  var ballIndices: array\u003cu32, NUM_BALLS\u003e;\n  var ballCount = 0u;\n  \n  // Dark background\n  var color = vec3\u003cf32\u003e(0.05, 0.08, 0.15);\n  \n  // Draw each ball and collect indices of balls that affect this pixel\n  for (var i = 0u; i \u003c NUM_BALLS; i++) { \n    // Read ball data: (x, y, vx, vy)\n    let ballData = buffer0[i];\n    \n    let ballPos = ballData.xy;\n    let ballVel = ballData.zw;\n    \n    // Calculate distance from pixel to ball center\n    let dist = length(uv - ballPos);\n    \n    // Anti-aliased circle rendering\n    let edgeWidth = 0.004;\n    let alpha = 1.0 - smoothstep(BALL_RADIUS - edgeWidth, BALL_RADIUS + edgeWidth, dist);\n    \n    if (alpha \u003e 0.0) {\n      // Add this ball index to our list (if we have space)\n      if (ballCount \u003c NUM_BALLS) {\n        ballIndices[ballCount] = i;\n        ballCount++;\n      }\n      \n      color = getBallColor(i, ballVel);\n      \n      // Add specular highlight\n      let lightOffset = vec2\u003cf32\u003e(-BALL_RADIUS * 0.3, BALL_RADIUS * 0.3);\n      let highlightDist = length(uv - ballPos + lightOffset);\n      \n      if (highlightDist \u003c BALL_RADIUS * 0.25) {\n        let highlightAlpha = 1.0 - smoothstep(0.0, BALL_RADIUS * 0.25, highlightDist);\n        color = mix(color, vec3\u003cf32\u003e(1.0), highlightAlpha * 0.4 * alpha);\n      }\n    }\n  }\n  \n  // Add subtle vignette\n  let vignette = 1.0 - 0.2 * length(uv - vec2\u003cf32\u003e(0.5));\n  color = color * vignette;\n\n // populate collision mesh\n for(var i = 0u; i \u003c ballCount; i ++)\n{\n for(var j = 0u; j \u003c ballCount; j ++)\n{\nstoreCollision(ballIndices[i],ballIndices[j]);\n}\n}\n  \n  return vec4\u003cf32\u003e(color, 1.0);\n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
+        }
+      }
+    ],
+    "tags": [
+      {
+        "id": 28,
+        "name": "physics"
+      },
+      {
+        "id": 3,
+        "name": "compute"
+      },
+      {
+        "id": 29,
+        "name": "collision"
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "user_id": 5,
+    "name": "Simple Compute Test",
+    "author": "daniel",
+    "shader_scripts": [
+      {
+        "id": 0,
+        "code": "// Minimal compute shader test - writes simple pattern\n@compute @workgroup_size(1, 1, 1)\nfn cs_main(\n  @builtin(global_invocation_id) gid: vec3\u003cu32\u003e\n) {\n  let index = gid.y * 10 + gid.x;\n  outBuffer[index]=vec4\u003cf32\u003e(f32(index) * 0.01);\n  \n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 10,
+          "height": 10
+        },
+        "kind": "compute"
+      },
+      {
+        "id": 1,
+        "code": "// Minimal fragment shader - displays compute result\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n  let uv = coord.xy / u.resolution;\n  \n  // Sample the compute result from buffer1\n  let index =\n    i32(uv.x * 10.0) + 10 * \n    i32(uv.y * 10.0)\n  ;\n\nreturn buffer0[index];\n\n}",
+        "buffer": {
+          "format": "rgba8unorm",
+          "width": 512,
+          "height": 512
+        }
+      }
+    ],
+    "tags": [
+      {
+        "id": 28,
+        "name": "physics"
+      },
+      {
+        "id": 3,
+        "name": "compute"
+      },
+      {
+        "id": 29,
+        "name": "collision"
+      }
+    ]
+  },
+  {
     "id": 5,
     "user_id": 2,
     "name": "User Shadering",
@@ -15,7 +145,7 @@
       },
       {
         "id": 1,
-        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    var pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    // Sample from previous scripts if available\n    // let previousColor = textureSample(buffer1, buffer1_sampler, uv);\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(u.time));\n    return vec4\u003cf32\u003e(color, 1.0);\n}",
+        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    let pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(u.time));\n    return vec4\u003cf32\u003e(color, 1.0);\n}",
         "buffer": {
           "format": "rgba8unorm",
           "width": 512,
@@ -35,27 +165,61 @@
     ]
   },
   {
-    "id": 3,
-    "user_id": 3,
-    "name": "Uniforms Example",
+    "id": 10,
+    "user_id": 5,
+    "name": "SDF Chess Board 3D",
+    "author": "daniel",
+    "common_script": "// 3D SDF primitives\nfn sdSphere(p: vec3\u003cf32\u003e, r: f32) -\u003e f32 {\n  return length(p) - r;\n}\n\nfn sdBox3D(p: vec3\u003cf32\u003e, b: vec3\u003cf32\u003e) -\u003e f32 {\n  let d = abs(p) - b;\n  return length(max(d, vec3\u003cf32\u003e(0.0))) + min(max(d.x, max(d.y, d.z)), 0.0);\n}\n\nfn sdCylinder(p: vec3\u003cf32\u003e, r: f32, h: f32) -\u003e f32 {\n  let d = vec2\u003cf32\u003e(length(p.xz) - r, abs(p.y) - h);\n  return min(max(d.x, d.y), 0.0) + length(max(d, vec2\u003cf32\u003e(0.0)));\n}\n\nfn sdUnion(d1: f32, d2: f32) -\u003e f32 {\n  return min(d1, d2);\n}\n\nfn sdSubtraction(d1: f32, d2: f32) -\u003e f32 {\n  return max(d1, -d2);\n}\n\n// 3D Chess pieces\nfn sdPawn3D(p: vec3\u003cf32\u003e) -\u003e f32 {\n  let head = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.35, 0.0), 0.12);\n  let neck = sdCylinder(p - vec3\u003cf32\u003e(0.0, 0.18, 0.0), 0.05, 0.08);\n  let body = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.05, 0.0), 0.15);\n  let base = sdCylinder(p + vec3\u003cf32\u003e(0.0, 0.04, 0.0), 0.18, 0.04);\n  return sdUnion(sdUnion(sdUnion(head, neck), body), base);\n}\n\nfn sdRook3D(p: vec3\u003cf32\u003e) -\u003e f32 {\n  let tower = sdBox3D(p - vec3\u003cf32\u003e(0.0, 0.15, 0.0), vec3\u003cf32\u003e(0.12, 0.15, 0.12));\n  let top = sdBox3D(p - vec3\u003cf32\u003e(0.0, 0.33, 0.0), vec3\u003cf32\u003e(0.15, 0.03, 0.15));\n  let base = sdCylinder(p + vec3\u003cf32\u003e(0.0, 0.04, 0.0), 0.18, 0.04);\n  let notch1 = sdBox3D(p - vec3\u003cf32\u003e(-0.08, 0.38, 0.0), vec3\u003cf32\u003e(0.04, 0.04, 0.16));\n  let notch2 = sdBox3D(p - vec3\u003cf32\u003e(0.08, 0.38, 0.0), vec3\u003cf32\u003e(0.04, 0.04, 0.16));\n  let body = sdUnion(sdUnion(tower, top), base);\n  return sdSubtraction(body, sdUnion(notch1, notch2));\n}\n\nfn sdKnight3D(p: vec3\u003cf32\u003e) -\u003e f32 {\n  let head = sdSphere(p - vec3\u003cf32\u003e(0.05, 0.25, 0.0), 0.12);\n  let ear = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.35, 0.0), 0.06);\n  let neck = sdBox3D(p - vec3\u003cf32\u003e(0.0, 0.1, 0.0), vec3\u003cf32\u003e(0.08, 0.15, 0.08));\n  let base = sdCylinder(p + vec3\u003cf32\u003e(0.0, 0.04, 0.0), 0.18, 0.04);\n  return sdUnion(sdUnion(sdUnion(head, ear), neck), base);\n}\n\nfn sdBishop3D(p: vec3\u003cf32\u003e) -\u003e f32 {\n  let tip = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.42, 0.0), 0.05);\n  let head = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.3, 0.0), 0.10);\n  let neck = sdCylinder(p - vec3\u003cf32\u003e(0.0, 0.15, 0.0), 0.06, 0.10);\n  let body = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.02, 0.0), 0.14);\n  let base = sdCylinder(p + vec3\u003cf32\u003e(0.0, 0.04, 0.0), 0.18, 0.04);\n  return sdUnion(sdUnion(sdUnion(sdUnion(tip, head), neck), body), base);\n}\n\nfn sdQueen3D(p: vec3\u003cf32\u003e) -\u003e f32 {\n  let crown = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.32, 0.0), 0.12);\n  let spike1 = sdBox3D(p - vec3\u003cf32\u003e(0.0, 0.45, 0.0), vec3\u003cf32\u003e(0.03, 0.08, 0.03));\n  let spike2 = sdBox3D(p - vec3\u003cf32\u003e(-0.10, 0.42, 0.0), vec3\u003cf32\u003e(0.03, 0.06, 0.03));\n  let spike3 = sdBox3D(p - vec3\u003cf32\u003e(0.10, 0.42, 0.0), vec3\u003cf32\u003e(0.03, 0.06, 0.03));\n  let neck = sdCylinder(p - vec3\u003cf32\u003e(0.0, 0.17, 0.0), 0.07, 0.10);\n  let body = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.02, 0.0), 0.15);\n  let base = sdCylinder(p + vec3\u003cf32\u003e(0.0, 0.04, 0.0), 0.18, 0.04);\n  let top = sdUnion(sdUnion(sdUnion(sdUnion(crown, spike1), spike2), spike3), neck);\n  return sdUnion(sdUnion(top, body), base);\n}\n\nfn sdKing3D(p: vec3\u003cf32\u003e) -\u003e f32 {\n  let cross_v = sdBox3D(p - vec3\u003cf32\u003e(0.0, 0.48, 0.0), vec3\u003cf32\u003e(0.03, 0.10, 0.03));\n  let cross_h = sdBox3D(p - vec3\u003cf32\u003e(0.0, 0.48, 0.0), vec3\u003cf32\u003e(0.08, 0.03, 0.03));\n  let crown = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.32, 0.0), 0.12);\n  let neck = sdCylinder(p - vec3\u003cf32\u003e(0.0, 0.17, 0.0), 0.07, 0.10);\n  let body = sdSphere(p - vec3\u003cf32\u003e(0.0, 0.02, 0.0), 0.15);\n  let base = sdCylinder(p + vec3\u003cf32\u003e(0.0, 0.04, 0.0), 0.18, 0.04);\n  let cross = sdUnion(cross_v, cross_h);\n  return sdUnion(sdUnion(sdUnion(sdUnion(cross, crown), neck), body), base);\n}\n\n// Scene SDF with material ID\nstruct Hit {\n  dist: f32,\n  material: i32, // 0=board, 1=white piece, 2=black piece\n}\n\n// Material properties for reflections\nstruct Material {\n  baseColor: vec3\u003cf32\u003e,\n  reflectivity: f32,\n}\n\nfn getMaterial(matId: i32, boardPos: vec3\u003cf32\u003e) -\u003e Material {\n  var mat: Material;\n  \n  if (matId == 0) {\n    // Chess board - glossy finish\n    let square = floor(boardPos.xz + 4.0);\n    let checker = (i32(square.x) + i32(square.y)) \u0026 1;\n    mat.baseColor = select(vec3\u003cf32\u003e(0.05, 0.05, 0.05), vec3\u003cf32\u003e(0.95, 0.93, 0.88), checker == 0);\n    mat.reflectivity = 0.4;\n    \n    // Board border - less reflective\n    if (abs(boardPos.x) \u003e 4.0 || abs(boardPos.z) \u003e 4.0) {\n      mat.baseColor = vec3\u003cf32\u003e(0.2, 0.15, 0.1);\n      mat.reflectivity = 0.15;\n    }\n  } else if (matId == 1) {\n    // White pieces - highly reflective\n    mat.baseColor = vec3\u003cf32\u003e(0.95, 0.95, 0.92);\n    mat.reflectivity = 0.6;\n  } else {\n    // Black pieces - moderately reflective\n    mat.baseColor = vec3\u003cf32\u003e(0.15, 0.12, 0.10);\n    mat.reflectivity = 0.5;\n  }\n  \n  return mat;\n}\n\nfn sceneSDF(p: vec3\u003cf32\u003e) -\u003e Hit {\n  // Chess board plane\n  let boardDist = p.y + 0.1;\n  var hit = Hit(boardDist, 0);\n  \n  // Piece positions array (x, z, type, is_white)\n  // type: 0=pawn, 1=rook, 2=knight, 3=bishop, 4=queen, 5=king\n  let positions = array\u003cvec4\u003cf32\u003e, 32\u003e(\n    // White pieces\n    vec4\u003cf32\u003e(-3.5, -3.5, 1.0, 1.0), vec4\u003cf32\u003e(3.5, -3.5, 1.0, 1.0), // Rooks\n    vec4\u003cf32\u003e(-2.5, -3.5, 2.0, 1.0), vec4\u003cf32\u003e(2.5, -3.5, 2.0, 1.0), // Knights\n    vec4\u003cf32\u003e(-1.5, -3.5, 3.0, 1.0), vec4\u003cf32\u003e(1.5, -3.5, 3.0, 1.0), // Bishops\n    vec4\u003cf32\u003e(-0.5, -3.5, 4.0, 1.0), vec4\u003cf32\u003e(0.5, -3.5, 5.0, 1.0), // Queen, King\n    vec4\u003cf32\u003e(-3.5, -2.5, 0.0, 1.0), vec4\u003cf32\u003e(-2.5, -2.5, 0.0, 1.0), // Pawns\n    vec4\u003cf32\u003e(-1.5, -2.5, 0.0, 1.0), vec4\u003cf32\u003e(-0.5, -2.5, 0.0, 1.0),\n    vec4\u003cf32\u003e(0.5, -2.5, 0.0, 1.0), vec4\u003cf32\u003e(1.5, -2.5, 0.0, 1.0),\n    vec4\u003cf32\u003e(2.5, -2.5, 0.0, 1.0), vec4\u003cf32\u003e(3.5, -2.5, 0.0, 1.0),\n    // Black pieces\n    vec4\u003cf32\u003e(-3.5, 3.5, 1.0, 0.0), vec4\u003cf32\u003e(3.5, 3.5, 1.0, 0.0), // Rooks\n    vec4\u003cf32\u003e(-2.5, 3.5, 2.0, 0.0), vec4\u003cf32\u003e(2.5, 3.5, 2.0, 0.0), // Knights\n    vec4\u003cf32\u003e(-1.5, 3.5, 3.0, 0.0), vec4\u003cf32\u003e(1.5, 3.5, 3.0, 0.0), // Bishops\n    vec4\u003cf32\u003e(-0.5, 3.5, 4.0, 0.0), vec4\u003cf32\u003e(0.5, 3.5, 5.0, 0.0), // Queen, King\n    vec4\u003cf32\u003e(-3.5, 2.5, 0.0, 0.0), vec4\u003cf32\u003e(-2.5, 2.5, 0.0, 0.0), // Pawns\n    vec4\u003cf32\u003e(-1.5, 2.5, 0.0, 0.0), vec4\u003cf32\u003e(-0.5, 2.5, 0.0, 0.0),\n    vec4\u003cf32\u003e(0.5, 2.5, 0.0, 0.0), vec4\u003cf32\u003e(1.5, 2.5, 0.0, 0.0),\n    vec4\u003cf32\u003e(2.5, 2.5, 0.0, 0.0), vec4\u003cf32\u003e(3.5, 2.5, 0.0, 0.0)\n  );\n  \n  for (var i = 0; i \u003c 32; i++) {\n    let pos = positions[i];\n    let piecePos = p - vec3\u003cf32\u003e(pos.x, 0.0, pos.y);\n    var pieceDist: f32;\n    \n    let pieceType = i32(pos.z);\n    if (pieceType == 0) { pieceDist = sdPawn3D(piecePos); }\n    else if (pieceType == 1) { pieceDist = sdRook3D(piecePos); }\n    else if (pieceType == 2) { pieceDist = sdKnight3D(piecePos); }\n    else if (pieceType == 3) { pieceDist = sdBishop3D(piecePos); }\n    else if (pieceType == 4) { pieceDist = sdQueen3D(piecePos); }\n    else { pieceDist = sdKing3D(piecePos); }\n    \n    if (pieceDist \u003c hit.dist) {\n      hit.dist = pieceDist;\n      hit.material = i32(pos.w) + 1; // 1=white, 2=black\n    }\n  }\n  \n  return hit;\n}\n\n// Calculate normal using gradient\nfn getNormal(p: vec3\u003cf32\u003e) -\u003e vec3\u003cf32\u003e {\n  let e = 0.001;\n  let h = sceneSDF(p).dist;\n  return normalize(vec3\u003cf32\u003e(\n    sceneSDF(p + vec3\u003cf32\u003e(e, 0.0, 0.0)).dist - h,\n    sceneSDF(p + vec3\u003cf32\u003e(0.0, e, 0.0)).dist - h,\n    sceneSDF(p + vec3\u003cf32\u003e(0.0, 0.0, e)).dist - h\n  ));\n}\n\n// Trace a ray and return color with reflections\nfn traceRay(rayOrigin: vec3\u003cf32\u003e, rayDir: vec3\u003cf32\u003e) -\u003e vec3\u003cf32\u003e {\n  let lightDir = normalize(vec3\u003cf32\u003e(-0.5, 0.8, -0.3));\n  let ambient = 0.3;\n  \n  var color = vec3\u003cf32\u003e(0.0);\n  var reflectivity = 1.0;\n  var ro = rayOrigin;\n  var rd = rayDir;\n  \n  // 3 bounces of reflection\n  for (var bounce = 0; bounce \u003c 2; bounce++) {\n    var t = 0.0;\n    var hitFound = false;\n    var hit = Hit(0.0, 0);\n    \n    // Raymarch\n    for (var i = 0; i \u003c 96; i++) {\n      let p = ro + rd * t;\n      hit = sceneSDF(p);\n      \n      if (hit.dist \u003c 0.001) {\n        hitFound = true;\n        break;\n      }\n      if (t \u003e 50.0) { break; }\n      \n      t += hit.dist;\n    }\n    \n    if (!hitFound) {\n      // Sky color\n      color += vec3\u003cf32\u003e(0.1, 0.12, 0.15) * reflectivity;\n      break;\n    }\n    \n    let p = ro + rd * t;\n    let normal = getNormal(p);\n    let mat = getMaterial(hit.material, p);\n    \n    // Lighting\n    let diffuse = max(dot(normal, lightDir), 0.0);\n    let specular = pow(max(dot(normal, normalize(lightDir + normalize(-rd))), 0.0), 32.0);\n    \n    // Soft shadows\n    var shadowRay = p + normal * 0.01;\n    var shadowT = 0.0;\n    var shadow = 1.0;\n    for (var i = 0; i \u003c 24; i++) {\n      let shadowP = shadowRay + lightDir * shadowT;\n      let shadowHit = sceneSDF(shadowP);\n      if (shadowHit.dist \u003c 0.01) {\n        shadow = 0.3;\n        break;\n      }\n      if (shadowT \u003e 10.0) { break; }\n      shadow = min(shadow, 8.0 * shadowHit.dist / shadowT);\n      shadowT += shadowHit.dist;\n    }\n    \n    // Accumulate color from this bounce\n    var localColor = mat.baseColor * (ambient + diffuse * 0.7 * mix(0.5, 1.0, shadow));\n    if (hit.material == 1) {\n      localColor += vec3\u003cf32\u003e(0.5) * specular * shadow;\n    }\n    \n    // Add contribution from this bounce\n    color += localColor * reflectivity * (1.0 - mat.reflectivity);\n    \n    // Update for next bounce\n    reflectivity *= mat.reflectivity;\n    if (reflectivity \u003c 0.01) { break; } // Early exit if reflection too weak\n    \n    // Set up reflection ray\n    ro = p + normal * 0.01;\n    rd = reflect(rd, normal);\n  }\n  \n  return color;\n}",
     "shader_scripts": [
       {
-        "id": 4,
-        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    var pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    // Sample from previous scripts if available\n    // let previousColor = textureSample(buffer1, buffer1_sampler, uv);\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(5.0 * u.time));\n    return vec4\u003cf32\u003e(color,1.0);\n}",
+        "id": 0,
+        "code": "@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n  let uv = coord.xy / u.resolution;\n  \n  let camPos = vec3\u003cf32\u003e(\n    (u.mouse.x -0.5) * 8,1,-5 + u.mouse.y*8\n  );\n  \n  let forward = normalize(vec3\u003cf32\u003e(0,-2,1));\n  let right = normalize(cross(vec3\u003cf32\u003e(0.0, 1.0, 0.0), forward));\n  let up = cross(forward, right);\n\n  let aspect = vec2\u003cf32\u003e(2.0,2.0);\n  \n  // Ray direction\n  let rd = normalize(forward + (uv.x - 0.5) * right * aspect.x + uv.y * up * aspect.y);\n  \n  // Trace with reflections (3 bounces)\n  var color = traceRay(camPos, rd);\n  \n  // Gamma correction\n  color = pow(color, vec3\u003cf32\u003e(0.4545));\n  \n  return vec4\u003cf32\u003e(color, 1.0);\n}",
         "buffer": {
           "format": "rgba8unorm",
-          "width": 4,
-          "height": 4
-        }
+          "width": 512,
+          "height": 512
+        },
+        "kind": "fragment"
+      }
+    ],
+    "tags": [
+      {
+        "id": 1,
+        "name": "fragment"
       },
       {
-        "id": 5,
-        "code": "@vertex\nfn vs_main(@builtin(vertex_index) vertex_index: u32) -\u003e @builtin(position) vec4\u003cf32\u003e {\n    var pos = array\u003cvec2\u003cf32\u003e, 3\u003e(\n        vec2\u003cf32\u003e(-1.0, -1.0),\n        vec2\u003cf32\u003e( 3.0, -1.0),\n        vec2\u003cf32\u003e(-1.0,  3.0)\n    );\n    return vec4\u003cf32\u003e(pos[vertex_index], 0.0, 1.0);\n}\n\n@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    // Sample from previous scripts if available\n    let color = textureSample(buffer4, buffer4_sampler, uv);\nif (uv.x \u003c u.mouse.x) {return vec4\u003cf32\u003e(0.5);}\nif (1.0 - uv.y \u003c u.mouse.y) {return vec4\u003cf32\u003e(0.25);}\n    return vec4\u003cf32\u003e(color);\n}",
+        "id": 30,
+        "name": "sdf"
+      },
+      {
+        "id": 32,
+        "name": "3d"
+      },
+      {
+        "id": 33,
+        "name": "raymarching"
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "user_id": 5,
+    "name": "New Shader",
+    "shader_scripts": [
+      {
+        "id": 0,
+        "code": "@fragment\nfn fs_main(@builtin(position) coord: vec4\u003cf32\u003e) -\u003e @location(0) vec4\u003cf32\u003e {\n    let uv = coord.xy / u.resolution;\n    let color = vec3\u003cf32\u003e(uv, 0.5 + 0.5 * sin(5.0 * u.time));\n    return vec4\u003cf32\u003e(color,1.0);\n}\n",
         "buffer": {
           "format": "rgba8unorm",
           "width": 512,
           "height": 512
         }
+      }
+    ],
+    "tags": [
+      {
+        "id": 26,
+        "name": "Shader"
       }
     ]
   }

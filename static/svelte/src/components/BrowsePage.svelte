@@ -1,95 +1,91 @@
 <script>
   import SearchBar from './SearchBar.svelte';
-  import TagFilters from './TagFilters.svelte';
   import ShaderGrid from './ShaderGrid.svelte';
   import DeleteConfirmDialog from './DeleteConfirmDialog.svelte';
-  import { 
-    displayShaders, 
-    availableTags, 
-    shaderFilters, 
-    shadersLoading,
-    pageTitle,
-    deleteConfirmModal
-  } from '../stores/selectors.js';
-  import { 
-    shaderActions, 
-    filterActions, 
-    uiActions 
-  } from '../stores/actions.js';
-  import { onMount } from 'svelte';
+  import Tags from './Tags.svelte';
+  import { shaders } from '../stores/shaders.js';
+  import { filters } from '../stores/search.js';
+  import {tags, LoadTags} from '../stores/tags.js';
+  import { user } from '../stores/user.js';
+  import { derived } from 'svelte/store';
 
-  // Use centralized selectors - no local state needed
-  $: shaders = $displayShaders;
-  $: tags = $availableTags;
-  $: filters = $shaderFilters;
-  $: loading = $shadersLoading;
-  $: title = $pageTitle;
-  $: deleteDialog = $deleteConfirmModal;
+  let pageTitle = derived([filters, user], ([$filters, $user]) => $filters.user_id && $user.user_id && $user.user_id === $filters.user_id ? 'My Shaders' : 'Browse Shaders');
+  let showDeleteDialog = false;
+  let shaderToDelete = null;
+  let isDeleting = false;
+
+  // Check if we're on the "My Shaders" page
+  if (typeof window !== 'undefined' && window.myShaders) {
+    pageTitle = window.myShaders.title || 'My Shaders';
+  }
 
   function handleShaderDelete(event) {
-    const { shader } = event.detail;
-    uiActions.showDeleteConfirm(shader);
+    const { shader, id, name } = event.detail;
+    shaderToDelete = { shader, id, name };
+    showDeleteDialog = true;
   }
 
   function hideDeleteDialog() {
-    if (deleteDialog.isDeleting) return;
-    uiActions.hideDeleteConfirm();
+    if (isDeleting) return;
+    showDeleteDialog = false;
+    shaderToDelete = null;
   }
 
   async function confirmDelete() {
-    if (!deleteDialog.shader || deleteDialog.isDeleting) return;
-    await shaderActions.deleteShader(deleteDialog.shader.id);
+    if (!shaderToDelete || isDeleting) return;
+    
+    try {
+      isDeleting = true;
+      const result = await dataManager.deleteShader(shaderToDelete.id);
+      
+      if (result.success) {
+        hideDeleteDialog();
+      } else {
+        console.error('Delete failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Delete failed:', error);
+    } finally {
+      isDeleting = false;
+    }
   }
 
-  // No need for onMount - navigation actions handle data loading
+  LoadTags();
+
 </script>
 
-<div class="browse-page">
+<section class="browse-svelte" aria-label="{$pageTitle}">
   <div class="page-header">
-    <h1>{title}</h1>
-    <div class="page-stats">
-      {#if loading}
-        <span class="loading-text">Loading...</span>
-      {:else}
-        <span class="shader-count">{shaders.length} shader{shaders.length !== 1 ? 's' : ''}</span>
-      {/if}
-    </div>
-  </div>
-
-  <div class="controls-section">
-    <SearchBar />
-    <TagFilters />
-  </div>
-
-  <div class="content-section">
-    {#if loading}
-      <div class="loading-grid">
-        {#each Array(6) as _, i}
-          <div class="shader-card-skeleton" />
-        {/each}
-      </div>
+    <h1>{$pageTitle}</h1>
+    {#if $pageTitle === 'My Shaders'}
+      <p class="page-description">Your personal shader collection</p>
     {:else}
-      <ShaderGrid on:delete={handleShaderDelete} />
+      <p class="page-description">Discover and explore community shaders</p>
     {/if}
   </div>
 
-  {#if deleteDialog.show}
-    <DeleteConfirmDialog
-      shader={deleteDialog.shader}
-      isDeleting={deleteDialog.isDeleting}
-      on:confirm={confirmDelete}
-      on:cancel={hideDeleteDialog}
-    />
+  <SearchBar />
+  <Tags bind:tags={$filters.tags} options={$tags.map(t => t.name)} edit={true} />
+  
+  {#if $shaders}
+    <ShaderGrid list={$shaders} on:delete={handleShaderDelete} />
   {/if}
-</div>
+</section>
+
+<!-- Delete Confirmation Dialog -->
+<DeleteConfirmDialog 
+  show={showDeleteDialog}
+  shaderName={shaderToDelete?.name || ''}
+  isDeleting={isDeleting}
+  on:confirm={confirmDelete}
+  on:cancel={hideDeleteDialog}
+/>
 
 <style>
-  .browse-svelte { display: flex; flex-direction: column; gap: 1rem; }
-
-  .browse-page {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 2rem;
+  .browse-svelte { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 1rem; 
   }
 
   .page-header {
@@ -108,11 +104,21 @@
     color: #718096;
   }
 
-  .loading {
+  .loading, .error {
     text-align: center;
     padding: 4rem 2rem;
-    color: #718096;
     font-size: 1.1rem;
+  }
+
+  .loading {
+    color: #718096;
+  }
+
+  .error {
+    color: #e53e3e;
+    background-color: #fed7d7;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
   }
 
   .loading::after {
@@ -127,22 +133,14 @@
     animation: spin 1s linear infinite;
   }
 
-  .pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 1rem;
-    padding: 2rem 0;
-  }
-
-  .page-info {
-    color: #718096;
-    font-weight: 500;
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 
   @media (max-width: 768px) {
-    .browse-page {
-      padding: 0 1rem;
+    .page-header h1 {
+      font-size: 2rem;
     }
   }
 </style>

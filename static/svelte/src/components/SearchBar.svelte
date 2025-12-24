@@ -1,40 +1,27 @@
 <script>
-  import { searchQuery } from '../stores/selectors.js';
-  import { filterActions } from '../stores/actions.js';
-  
-  $: q = $searchQuery;
+  import { filters, setQuery, clearFilters } from '../stores/search.js';
   
   function submit(e){ 
     e.preventDefault(); 
-    filterActions.setSearchQuery(q); 
-  }
-  
-  function onClear(){ 
-    filterActions.setSearchQuery('');
   }
   
   function onInput(e) {
-    // Update local value for immediate UI feedback
-    q = e.target.value;
-    // Debounce the actual filter update
-    clearTimeout(onInput.timeout);
-    onInput.timeout = setTimeout(() => {
-      filterActions.setSearchQuery(e.target.value);
-    }, 300);
+    setQuery( e.target.value );
   }
 </script>
 
 <form class="search-bar" on:submit={submit} role="search" aria-label="Shader search">
   <input 
-    placeholder="Search by name, author, tags, or code..." 
-    value={q}
+    placeholder="Search by name, author, tags" 
+    value={$filters.query}
     on:input={onInput}
     aria-label="Search term" 
   />
   <button type="submit">Search</button>
-  {#if q}
-    <button type="button" on:click={onClear} aria-label="Clear search">×</button>
+  {#if $filters.query}
+    <button type="button" on:click={clearFilters} aria-label="Clear search">×</button>
   {/if}
+
 </form>
 
 <style>

@@ -1,51 +1,57 @@
 <script>
-  import { isAuthenticated, authUsername } from '../stores/selectors.js';
-  import { navigationActions } from '../stores/actions.js';
-  
-  $: authenticated = $isAuthenticated;
-  $: username = $authUsername;
+    import { user } from '../stores/user.js';
+    import { BrowsePage, NewShaderPage, MyShadersPage } from '../stores/page.js';
+    import AuthBar from './AuthBar.svelte';
+
+  $: authenticated = $user.is_authenticated;
+  $: username = $user.username;
 </script>
 
 <header class="navbar">
   <div class="nav-container">
     <div class="nav-brand">
-      <button class="brand-link" on:click={() => navigationActions.navigate('/')}>
+      <button class="brand-link" on:click={BrowsePage}>
         <i class="fas fa-cube"></i> ShaderStack
       </button>
     </div>
     
     <nav class="nav-menu">
-      <button class="nav-link" on:click={() => navigationActions.navigate('/')}>
+      <button class="nav-link" on:click={BrowsePage}>
         <i class="fas fa-search"></i> Browse
       </button>
       
       {#if authenticated}
-        <button class="nav-link" on:click={() => navigationActions.navigate('/my')}>
+        <button class="nav-link" on:click={MyShadersPage}>
           <i class="fas fa-user"></i> My Shaders
         </button>
-        <button class="nav-link" on:click={() => navigationActions.navigate('/new')}>
+        <button class="nav-link" on:click={NewShaderPage}>
           <i class="fas fa-plus"></i> New Shader
         </button>
       {/if}
     </nav>
     
     <div class="nav-auth">
-      <slot name="auth">
-        <!-- AuthBar will be placed here -->
-      </slot>
+      <AuthBar/>
     </div>
   </div>
 </header>
 
 <style>
+  header{
+    margin:-1.0rem;
+    margin-bottom:1.0rem;
+  }
+
   .navbar {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     padding: 0;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     position: sticky;
     top: 0;
     z-index: 1000;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.95) 100%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    backdrop-filter: blur(8px) saturate(120%)
   }
 
   .nav-container {

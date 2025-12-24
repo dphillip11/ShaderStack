@@ -1,7 +1,8 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { isAuthenticated, authUserId } from '../stores/selectors.js';
-  import { navigationActions } from '../stores/actions.js';
+  import {user} from '../stores/user.js';
+  import {EditorPage} from '../stores/page.js';
+  import {DeleteShader} from '../stores/shaders.js';
 
   export let shader;
   const dispatch = createEventDispatcher();
@@ -16,23 +17,19 @@
   const tagNames = tagObjs.map(t => t.name || t.Name);
 
   // Check if current user owns this shader
-  $: isOwner = $isAuthenticated && $authUserId === userId;
+  $: isOwner = $user.is_authenticated && $user.user_id === userId;
 
-  function handleDelete(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    dispatch('delete', { shader, id, name });
-  }
-
-  function viewShader(event) {
-    event.preventDefault();
-    navigationActions.navigate(`/${id}`);
+  function viewShader(){
+    EditorPage(shader);
   }
 </script>
 
 <div class="shader-card" data-shader-id={id}>
   <div class="shader-header">
-    <h3 class="shader-title"><a href="/{id}" on:click={viewShader}>{name}</a></h3>
+    <!-- svelte-ignore a11y-missing-attribute -->
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <h3 class="shader-title"><a on:click={viewShader}>{name}</a></h3>
     <div class="shader-meta">
       {#if author}<span class="author">by {author}</span>{/if}
       <span class="shader-id">#{id}</span>
@@ -45,9 +42,11 @@
     </div>
   {/if}
   <div class="shader-actions">
-    <a href="/{id}" class="btn-secondary" on:click={viewShader}><i class="fas fa-eye"></i> View</a>
+      <button class="btn-secondary" on:click={viewShader} title="Delete shader">
+        <i class="fas fa-eye"></i> View
+      </button>
     {#if isOwner}
-      <button class="btn-delete" on:click={handleDelete} title="Delete shader">
+      <button class="btn-delete" on:click={() => DeleteShader(id)} title="Delete shader">
         <i class="fas fa-trash"></i> Delete
       </button>
     {/if}

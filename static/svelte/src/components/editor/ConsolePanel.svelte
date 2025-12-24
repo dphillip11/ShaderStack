@@ -1,28 +1,17 @@
 <script>
-  import { editorConsole } from '../../stores/selectors.js';
-  import { editorActions } from '../../stores/actions.js';
-  import { afterUpdate } from 'svelte';
-  
-  let container;
-  afterUpdate(() => { 
-    if (container) container.scrollTop = container.scrollHeight; 
-  });
-  
-  function clear() { 
-    editorActions.clearConsole();
-  }
+  import { consoleMessages, clearConsole } from '../../stores/editor.js';
 </script>
 
 <div class="console-panel">
   <div class="console-header">
     <span>Console</span>
-    <button on:click={clear} aria-label="Clear console" class="clear-btn">✕</button>
+    <button on:click={clearConsole} aria-label="Clear console" class="clear-btn">✕</button>
   </div>
-  <div class="console-content" bind:this={container}>
-    {#each $editorConsole as m (m.id)}
+  <div class="console-content" >
+    {#each $consoleMessages as m (m.id)}
       <div class="console-message {m.type}">[{m.timestamp}] {m.message}</div>
     {/each}
-    {#if !$editorConsole.length}
+    {#if !$consoleMessages.length}
       <div class="empty">No messages</div>
     {/if}
   </div>

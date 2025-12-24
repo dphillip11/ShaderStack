@@ -1,28 +1,27 @@
 <script>
-  import { isAuthenticated, authUsername, authLoading } from '../stores/selectors.js';
-  import { authActions, uiActions } from '../stores/actions.js';
+  import { user, logout, workOffline, isOffline } from '../stores/user.js';
   import LoginModal from './LoginModal.svelte';
-  
-  $: authenticated = $isAuthenticated;
-  $: username = $authUsername;
-  $: loading = $authLoading;
+  import { onMount } from 'svelte';
   
   let modal;
-  
+
   function openLogin(){ 
-    uiActions.showLoginModal();
-  }
-  
-  function doLogout(){ 
-    authActions.logout();
+    if (modal && typeof modal.open === 'function') {
+      modal.open(); 
+    } else {
+      console.error('Modal reference is null or open() not available:', modal);
+    }
   }
 </script>
 <div class="auth-bar">
-  {#if authenticated}
-    <span class="user"><i class="fas fa-user"></i> {username}</span>
-    <button class="btn-small" on:click={doLogout} aria-label="Logout"><i class="fas fa-sign-out-alt"></i></button>
+  {#if $user.is_authenticated}
+    <span class="user"><i class="fas fa-user"></i> {$user.username}</span>
+    <button class="btn-small" on:click={logout} aria-label="Logout"><i class="fas fa-sign-out-alt"></i></button>
   {:else}
     <button class="btn-small primary" on:click={openLogin} aria-label="Login"><i class="fas fa-sign-in-alt"></i> Login</button>
+  {/if}
+  {#if !$isOffline}
+    <button class="btn-small primary" on:click={workOffline} aria-label="Work Offline"><i class="fas fa-sign-in-alt"></i> Work Offline</button>
   {/if}
   <LoginModal bind:this={modal} />
 </div>

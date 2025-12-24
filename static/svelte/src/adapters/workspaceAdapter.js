@@ -1,256 +1,186 @@
-import { 
-  appState,
-  updateAppState
-} from '../stores/app.js';
-
-import { 
-  editorActions,
-  uiActions
-} from '../stores/actions.js';
-
-import { 
-  saveShaderProject,
-  loadShaderProject,
-  deleteShaderProject
-} from '../stores/api.js';
-
 import { get } from 'svelte/store';
+import { activeShader, activeScript, updateScriptRuntime } from '../stores/activeShader.js';
+import { ComputeInjectedCode, CompileScript, ExtractErrors } from './shaderTools.js';
 
-// Helper functions to work with the new store structure
-function setInitializing(value) {
-  updateAppState(state => ({
-    ...state,
-    editor: { ...state.editor, isInitializing: value }
-  }));
+// Simple full-screen triangle copy shader with passthrough UVs
+const SAMPLE_TEXTURE_SHADER_SCRIPT = `
+struct VSOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
 }
 
-function setSaving(value) {
-  updateAppState(state => ({
-    ...state,
-    editor: { ...state.editor, isSaving: value }
-  }));
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VSOut {
+  var pos = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>( 3.0, -1.0),
+    vec2<f32>(-1.0,  3.0)
+  );
+  var uv = array<vec2<f32>, 3>(
+    vec2<f32>(0.0, 0.0),
+    vec2<f32>(2.0, 0.0),
+    vec2<f32>(0.0, 2.0)
+  );
+  var out: VSOut;
+  out.position = vec4<f32>(pos[vertex_index], 0.0, 1.0);
+  out.uv = uv[vertex_index];
+  return out;
 }
 
-function setRunning(value) {
-  updateAppState(state => ({
-    ...state,
-    editor: { ...state.editor, isRunning: value }
-  }));
-}
-
-function setError(message) {
-  updateAppState(state => ({
-    ...state,
-    editor: { ...state.editor, error: message }
-  }));
-}
-
-function setWebGPUReady(ready) {
-  updateAppState(state => ({
-    ...state,
-    editor: { ...state.editor, webGPUReady: ready }
-  }));
-}
-
-function addConsoleMessage(message, type = 'info') {
-  editorActions.addConsoleMessage(message, type);
-}
-
-function replaceAllScripts(scripts) {
-  updateAppState(state => ({
-    ...state,
-    editor: { ...state.editor, scripts }
-  }));
-}
-
-function setShader(shader) {
-  updateAppState(state => ({
-    ...state,
-    editor: { ...state.editor, shader }
-  }));
-}
-
-function registerWorkspace(workspace) {
-  // Store workspace reference globally for access from components
-  if (typeof window !== 'undefined') {
-    window.__workspaceRef = workspace;
-  }
-}
-
-function createDefaultProject(name) {
-  return {
-    id: null,
-    name: name,
-    description: "",
-    tags: [],
-    shader_scripts: [createDefaultScript(0)]
-  };
-}
-
-function createDefaultScript(id) {
-  return {
-    id: id,
-    code: `@vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
-    var pos = array<vec2<f32>, 3>(
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>( 3.0, -1.0),
-        vec2<f32>(-1.0,  3.0)
-    );
-    return vec4<f32>(pos[vertex_index], 0.0, 1.0);
-}
+@group(0) @binding(0) var sourceTexture: texture_2d<f32>;
+@group(0) @binding(1) var sourceSampler: sampler;
 
 @fragment
-fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
-    let uv = fragCoord.xy / u.resolution;
-    return vec4<f32>(uv, 0.5, 1.0);
-}`,
-    buffer: {
-      format: "rgba8unorm",
-      width: 512,
-      height: 512
-    }
-  };
-}
-
-// Use appState instead of editorState
-const editorState = {
-  subscribe: (callback) => {
-    return appState.subscribe(state => callback(state.editor));
-  }
-};
-
-class ShaderCompiler {
-  constructor() {
-    this.uniformsTemplate = `
-// Auto-injected uniforms
-struct Uniforms {
-    time: f32,
-    mouse: vec2<f32>,
-    resolution: vec2<f32>,
-    frame: u32,
-}
-
-@group(0) @binding(0) var<uniform> u: Uniforms;
-`;
-
-    this.textureBindingsTemplate = `
-// Auto-injected texture bindings
-{TEXTURE_BINDINGS}
-`;
-  }
-
-  injectBufferBindings(userCode, availableBuffers) {
-    let injectedCode = this.uniformsTemplate;
-    
-    // Add texture bindings for available buffers
-    let textureBindings = '';
-    let bindingIndex = 1;
-    
-    for (const [scriptId, bufferSpec] of availableBuffers) {
-      textureBindings += `@group(0) @binding(${bindingIndex}) var buffer${scriptId}: texture_2d<f32>;\n`;
-      textureBindings += `@group(0) @binding(${bindingIndex + 1}) var buffer${scriptId}_sampler: sampler;\n`;
-      bindingIndex += 2;
-    }
-    
-    injectedCode += this.textureBindingsTemplate.replace('{TEXTURE_BINDINGS}', textureBindings);
-    injectedCode += '\n// User code begins here\n';
-    injectedCode += userCode;
-    
-    return injectedCode;
-  }
-
-  async compile(code, device) {
-    try {
-      const shaderModule = device.createShaderModule({
-        code: code,
-        label: 'Compiled Shader'
-      });
-
-      // Check for compilation errors
-      const compilationInfo = await shaderModule.getCompilationInfo();
-      const errors = compilationInfo.messages.filter(msg => msg.type === 'error');
-      
-      if (errors.length > 0) {
-        const errorMessages = errors.map(err => 
-          `Line ${err.lineNum}: ${err.message}`
-        ).join('\n');
-        throw new Error(`Shader compilation failed:\n${errorMessages}`);
-      }
-
-      const warnings = compilationInfo.messages.filter(msg => msg.type === 'warning');
-      if (warnings.length > 0) {
-        warnings.forEach(warn => 
-          addConsoleMessage(`Warning at line ${warn.lineNum}: ${warn.message}`, 'info')
-        );
-      }
-
-      return shaderModule;
-    } catch (error) {
-      throw new Error(`Shader compilation error: ${error.message}`);
-    }
-  }
-}
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+  return textureSample(sourceTexture, sourceSampler, uv);
+}`;
 
 class ScriptEngine {
   constructor(device, shaderCompiler) {
     this.device = device;
     this.shaderCompiler = shaderCompiler;
-    this.scripts = new Map(); // scriptId -> { bufferSpec, renderPipeline, buffer, uniformBuffer, bindGroup }
-    
-    // Fix uniform buffer alignment for WebGPU
-    // struct Uniforms {
-    //     time: f32,           // offset 0,  size 4
-    //     mouse: vec2<f32>,    // offset 8,  size 8 (requires 8-byte alignment)
-    //     resolution: vec2<f32>, // offset 16, size 8 (requires 8-byte alignment)  
-    //     frame: u32,          // offset 24, size 4
-    // }
-    // Total size: 28 bytes, but we need to pad to 32 bytes (16-byte alignment for uniform buffers)
-    this.uniformData = new Float32Array(8); // 32 bytes total
+    this.scripts = new Map();
+    this.uniformData = new Float32Array(8);
     this.frame = 0;
     this.mousePos = { x: 0, y: 0 };
     this.startTime = performance.now();
   }
 
+  needsRecompile(scriptId, userCode, availableScripts) {
+    const existing = this.scripts.get(scriptId);
+    if (!existing) return true;
+    const currentShader = get(activeShader);
+    const shaderId = currentShader?.id ?? '__no_shader__';
+    // Recompile if shader changed, source changed, or buffer topology changed
+    if (existing._shaderId !== shaderId) return true;
+    if (existing.sourceCode !== userCode) return true;
+    if ((existing._bufferCount ?? 0) !== availableScripts.size) return true;
+    // Also recompile if output buffer spec changed
+    const bs = existing.bufferSpec || {};
+    const curScript = (get(activeShader)?.shader_scripts || []).find(s => s.id === scriptId) || {};
+    const cur = curScript.buffer || {};
+    if (bs.width !== cur.width || bs.height !== cur.height || bs.format !== cur.format) return true;
+    // Recompile if kind or compute workgroup changed
+    if ((existing.kind || 'fragment') !== (curScript.kind || 'fragment')) return true;
+    const prevWG = existing.compute?.workgroupSize || { x: 16, y: 16, z: 1 };
+    const curWG = curScript.compute?.workgroupSize || { x: 16, y: 16, z: 1 };
+    if (prevWG.x !== curWG.x || prevWG.y !== curWG.y || prevWG.z !== curWG.z) return true;
+    return false;
+  }
+
+  async ensureCompiled(scriptId, userCode, bufferSpec) {
+  // Build available scripts map like in createScript
+    const shader = get(activeShader);
+    const availableScripts = new Map();
+    if (shader && shader.shader_scripts) {
+      for (const s of shader.shader_scripts) {
+        if (s.id !== scriptId) availableScripts.set(s.id, s);
+      }
+    }
+    if (this.needsRecompile(scriptId, userCode, availableScripts)) {
+      await this.createScript(scriptId, userCode, bufferSpec);
+      await this.rebuildAllBindGroups();
+    }
+  }
+
   async createScript(scriptId, code, bufferSpec) {
     try {
-      // Get available buffers from other scripts
-      const availableBuffers = new Map();
-      for (const [id, scriptData] of this.scripts) {
-        if (id !== scriptId) {
-          availableBuffers.set(id, scriptData.bufferSpec);
+      // Reset runtime errors on (re)compile start
+      updateScriptRuntime(scriptId, { errors: [] });
+
+      const availableScripts = new Map();
+      
+      // Get available scripts from all scripts in the current shader
+      const shader = get(activeShader);
+      if (shader && shader.shader_scripts) {
+        for (const script of shader.shader_scripts) {
+          if (script.id !== scriptId) {
+            availableScripts.set(script.id, script);
+          }
         }
       }
 
-      // Inject buffer bindings and compile
-      const fullCode = this.shaderCompiler.injectBufferBindings(code, availableBuffers);
-      const shaderModule = await this.shaderCompiler.compile(fullCode, this.device);
+      console.log(`Creating script ${scriptId}, available scripts:`, Array.from(availableScripts.keys()));
 
-      // Create explicit bind group layout to match what we're actually binding
+      const scriptMeta = (get(activeShader)?.shader_scripts || []).find(s => s.id === scriptId) || {};
+      const kind = scriptMeta.kind || 'fragment';
+      // Detect if user code already defines a vertex shader when fragment
+      const hasVertex = kind === 'fragment' && /@vertex|fn\s+vs_main\s*\(/.test(code);
+      debugger;
+      const injectedCode = ComputeInjectedCode(availableScripts, {
+        withVertexShader: !hasVertex,
+        kind,
+        storageFormat: bufferSpec.format || 'rgba8unorm',
+        bufferWidth: bufferSpec.width || 512,
+        bufferHeight: bufferSpec.height || 512
+      }, shader.common_script || '\n');
+      const fullCode = `${injectedCode}\n${code}`;
+      const shaderModule = CompileScript(fullCode, this.device);
+
+      // Extract async compilation info errors
+      let extractedErrors = [];
+      try {
+        const msgs = await ExtractErrors(shaderModule);
+        extractedErrors = msgs?.map(m => ({
+          line: m.lineNum ?? null,
+          column: m.linePos ?? null,
+          text: m.lineNum != null ? `Line ${m.lineNum}: ${m.message || m.text || ''}`.trim() : (m.message || m.text || `${m}`)
+        })) || [];
+      } catch (infoErr) {
+        // ignore
+      }
+      updateScriptRuntime(scriptId, { injectedCode, compiledModule: shaderModule, errors: extractedErrors });
+
+      // If there are errors, don't proceed to create pipeline/bindings
+      if (extractedErrors.length > 0) {
+        throw new Error(extractedErrors[0]?.text || 'Shader compilation error');
+      }
+
       const bindGroupLayoutEntries = [
         {
           binding: 0,
-          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+          visibility: kind === 'compute' ? GPUShaderStage.COMPUTE : (GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT),
           buffer: { type: 'uniform' }
         }
       ];
 
-      // Add texture binding entries for each available buffer
       let bindingIndex = 1;
-      for (const [id, bufferData] of availableBuffers) {
-        bindGroupLayoutEntries.push(
-          {
+      for (const [id, scriptInfo] of availableScripts) {
+        const scriptKind = scriptInfo.kind || 'fragment';
+        if (scriptKind === 'compute') {
+          // Storage buffer binding for compute scripts
+          bindGroupLayoutEntries.push({
             binding: bindingIndex,
-            visibility: GPUShaderStage.FRAGMENT,
-            texture: { sampleType: 'float' }
-          },
-          {
-            binding: bindingIndex + 1,
-            visibility: GPUShaderStage.FRAGMENT,
-            sampler: {}
+            visibility: kind === 'compute' ? GPUShaderStage.COMPUTE : GPUShaderStage.FRAGMENT,
+            buffer: { type: 'storage' }
+          });
+          bindingIndex += 1;
+        } else {
+          // Texture bindings for fragment scripts
+          bindGroupLayoutEntries.push(
+            {
+              binding: bindingIndex,
+              visibility: kind === 'compute' ? GPUShaderStage.COMPUTE : GPUShaderStage.FRAGMENT,
+              texture: { sampleType: 'float' }
+            },
+            {
+              binding: bindingIndex + 1,
+              visibility: kind === 'compute' ? GPUShaderStage.COMPUTE : GPUShaderStage.FRAGMENT,
+              sampler: {}
+            }
+          );
+          bindingIndex += 2;
+        }
+      }
+      // For compute, add storage buffer binding for output
+      if (kind === 'compute') {
+        bindGroupLayoutEntries.push({
+          binding: bindingIndex,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { 
+            type: 'storage'
           }
-        );
-        bindingIndex += 2;
+        });
       }
 
       const bindGroupLayout = this.device.createBindGroupLayout({
@@ -263,42 +193,61 @@ class ScriptEngine {
         bindGroupLayouts: [bindGroupLayout]
       });
 
-      // Create render pipeline with explicit layout
-      const renderPipeline = this.device.createRenderPipeline({
-        label: `Script ${scriptId} Pipeline`,
-        layout: pipelineLayout,
-        vertex: {
-          module: shaderModule,
-          entryPoint: 'vs_main'
-        },
-        fragment: {
-          module: shaderModule,
-          entryPoint: 'fs_main',
-          targets: [{
-            format: bufferSpec.format || 'rgba8unorm'
-          }]
-        },
-        primitive: {
-          topology: 'triangle-list'
-        }
-      });
+      let renderPipeline = null;
+      let computePipeline = null;
+      if (kind === 'compute') {
+        computePipeline = this.device.createComputePipeline({
+          label: `Script ${scriptId} Compute Pipeline`,
+          layout: pipelineLayout,
+          compute: { module: shaderModule, entryPoint: 'cs_main' }
+        });
+      } else {
+        renderPipeline = this.device.createRenderPipeline({
+          label: `Script ${scriptId} Pipeline`,
+          layout: pipelineLayout,
+          vertex: {
+            module: shaderModule,
+            entryPoint: 'vs_main'
+          },
+          fragment: {
+            module: shaderModule,
+            entryPoint: 'fs_main',
+            targets: [{
+              format: bufferSpec.format || 'rgba8unorm'
+            }]
+          },
+          primitive: {
+            topology: 'triangle-list'
+          }
+        });
+      }
 
-      // Create output buffer/texture
       const texture = this.device.createTexture({
         label: `Script ${scriptId} Output`,
         size: [bufferSpec.width || 512, bufferSpec.height || 512],
         format: bufferSpec.format || 'rgba8unorm',
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC
+        usage: (kind === 'compute' ? GPUTextureUsage.STORAGE_BINDING : GPUTextureUsage.RENDER_ATTACHMENT) | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC
       });
 
-      // Create uniform buffer
       const uniformBuffer = this.device.createBuffer({
         label: `Script ${scriptId} Uniforms`,
         size: this.uniformData.byteLength,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
       });
 
-      // Create sampler
+      // Create storage buffer for compute shaders
+      let storageBuffer = null;
+      if (kind === 'compute') {
+        const width = bufferSpec.width || 512;
+        const height = bufferSpec.height || 512;
+        const bufferSize = width * height * 4 * 4; // vec4<f32> = 16 bytes
+        storageBuffer = this.device.createBuffer({
+          label: `Script ${scriptId} Storage Buffer`,
+          size: bufferSize,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+        });
+      }
+
       const sampler = this.device.createSampler({
         magFilter: 'linear',
         minFilter: 'linear',
@@ -306,20 +255,54 @@ class ScriptEngine {
         wrapT: 'clamp-to-edge'
       });
 
-      // Create bind group with matching entries
       const bindGroupEntries = [
         { binding: 0, resource: { buffer: uniformBuffer } }
       ];
 
       bindingIndex = 1;
-      for (const [id, scriptData] of this.scripts) {
-        if (id !== scriptId && scriptData.texture) {
-          bindGroupEntries.push(
-            { binding: bindingIndex, resource: scriptData.texture.createView() },
-            { binding: bindingIndex + 1, resource: sampler }
-          );
+      // Add bindings for scripts that are actually compiled
+      for (const [id, scriptInfo] of availableScripts) {
+        const compiledScript = this.scripts.get(id);
+        const scriptKind = scriptInfo.kind || 'fragment';
+        
+        if (scriptKind === 'compute') {
+          // Storage buffer binding for compute scripts
+          if (compiledScript && compiledScript.storageBuffer) {
+            bindGroupEntries.push({
+              binding: bindingIndex,
+              resource: { buffer: compiledScript.storageBuffer }
+            });
+          } else {
+            // Create placeholder storage buffer if script not compiled yet
+            const placeholderBuffer = this.device.createBuffer({
+              size: 4 * 4 * 4, // minimal vec4<f32>
+              usage: GPUBufferUsage.STORAGE
+            });
+            bindGroupEntries.push({
+              binding: bindingIndex,
+              resource: { buffer: placeholderBuffer }
+            });
+          }
+          bindingIndex += 1;
+        } else {
+          // Texture bindings for fragment scripts
+          if (compiledScript && compiledScript.texture) {
+            bindGroupEntries.push(
+              { binding: bindingIndex, resource: compiledScript.texture.createView() },
+              { binding: bindingIndex + 1, resource: sampler }
+            );
+          } else {
+            // Create placeholder bindings for scripts that aren't compiled yet
+            bindGroupEntries.push(
+              { binding: bindingIndex, resource: texture.createView() },
+              { binding: bindingIndex + 1, resource: sampler }
+            );
+          }
           bindingIndex += 2;
         }
+      }
+      if (kind === 'compute' && storageBuffer) {
+        bindGroupEntries.push({ binding: bindingIndex, resource: { buffer: storageBuffer } });
       }
 
       const bindGroup = this.device.createBindGroup({
@@ -328,22 +311,28 @@ class ScriptEngine {
         entries: bindGroupEntries
       });
 
-      // Store script data
       this.scripts.set(scriptId, {
         bufferSpec,
         renderPipeline,
+        computePipeline,
+        kind,
+        compute: scriptMeta.compute || null,
         texture,
+        storageBuffer,
         uniformBuffer,
         bindGroup,
         bindGroupLayout,
         sampler,
-        code: fullCode
+        code: fullCode,
+        sourceCode: code,
+        _shaderId: get(activeShader)?.id ?? '__no_shader__',
+        _bufferCount: availableScripts.size
       });
 
-      addConsoleMessage(`Script ${scriptId} compiled successfully`, 'success');
       return true;
     } catch (error) {
-      addConsoleMessage(`Script ${scriptId} compilation failed: ${error.message}`, 'error');
+      console.error(`Script ${scriptId} compilation failed:`, error.message);
+      updateScriptRuntime(scriptId, { compiledModule: null, errors: [{ text: error.message }] });
       throw error;
     }
   }
@@ -355,48 +344,88 @@ class ScriptEngine {
     }
 
     try {
-      // Update uniforms with correct alignment
       const currentTime = (performance.now() - this.startTime) / 1000;
-      
-      // Properly aligned uniform data:
-      this.uniformData[0] = currentTime;                    // time: f32 at offset 0
-      this.uniformData[1] = 0;                             // padding to align mouse to 8-byte boundary
-      this.uniformData[2] = this.mousePos.x;              // mouse.x: f32 at offset 8
-      this.uniformData[3] = this.mousePos.y;              // mouse.y: f32 at offset 12
-      this.uniformData[4] = script.bufferSpec.width || 512;  // resolution.x: f32 at offset 16
-      this.uniformData[5] = script.bufferSpec.height || 512; // resolution.y: f32 at offset 20
-      this.uniformData[6] = this.frame;                    // frame: u32 at offset 24
-      this.uniformData[7] = 0;                             // padding to 32 bytes
+
+      this.uniformData[0] = currentTime;
+      this.uniformData[1] = 0;
+      this.uniformData[2] = this.mousePos.x;
+      this.uniformData[3] = this.mousePos.y;
+      this.uniformData[4] = script.bufferSpec.width || 512;
+      this.uniformData[5] = script.bufferSpec.height || 512;
+      this.uniformData[6] = this.frame;
+      this.uniformData[7] = 0;
 
       this.device.queue.writeBuffer(script.uniformBuffer, 0, this.uniformData);
 
-      // Create render pass
       const commandEncoder = this.device.createCommandEncoder({
         label: `Script ${scriptId} Commands`
       });
 
-      const renderPass = commandEncoder.beginRenderPass({
-        label: `Script ${scriptId} Render Pass`,
-        colorAttachments: [{
-          view: script.texture.createView(),
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          loadOp: 'clear',
-          storeOp: 'store'
-        }]
-      });
-
-      renderPass.setPipeline(script.renderPipeline);
-      renderPass.setBindGroup(0, script.bindGroup);
-      renderPass.draw(3); // Full-screen triangle
-      renderPass.end();
+      if (script.kind === 'compute') {
+        const pass = commandEncoder.beginComputePass({ label: `Script ${scriptId} Compute Pass` });
+        pass.setPipeline(script.computePipeline);
+        pass.setBindGroup(0, script.bindGroup);
+        const width = script.bufferSpec.width || 512;
+        const height = script.bufferSpec.height || 512;
+        pass.dispatchWorkgroups(width, height, 1);
+        pass.end();
+      } else {
+        const renderPass = commandEncoder.beginRenderPass({
+          label: `Script ${scriptId} Render Pass`,
+          colorAttachments: [{
+            view: script.texture.createView(),
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            loadOp: 'clear',
+            storeOp: 'store'
+          }]
+        });
+  
+        renderPass.setPipeline(script.renderPipeline);
+        renderPass.setBindGroup(0, script.bindGroup);
+        renderPass.draw(3);
+        renderPass.end();
+      }
 
       this.device.queue.submit([commandEncoder.finish()]);
 
       return script.texture;
     } catch (error) {
-      addConsoleMessage(`Script ${scriptId} execution failed: ${error.message}`, 'error');
+      console.error(`Script ${scriptId} execution failed:`, error.message);
       throw error;
     }
+  }
+
+  // Encode a render pass for a script into the provided encoder (no submit)
+  encodeScriptPass(scriptId, commandEncoder) {
+    const script = this.scripts.get(scriptId);
+    if (!script) return;
+
+    // Update uniforms for this script
+    const currentTime = (performance.now() - this.startTime) / 1000;
+    this.uniformData[0] = currentTime;
+    this.uniformData[1] = 0;
+    this.uniformData[2] = this.mousePos.x;
+    this.uniformData[3] = this.mousePos.y;
+    this.uniformData[4] = script.bufferSpec.width || 512;
+    this.uniformData[5] = script.bufferSpec.height || 512;
+    this.uniformData[6] = this.frame;
+    this.uniformData[7] = 0;
+    this.device.queue.writeBuffer(script.uniformBuffer, 0, this.uniformData);
+
+    const renderPass = commandEncoder.beginRenderPass({
+      label: `Script ${scriptId} Render Pass`,
+      colorAttachments: [{
+        view: script.texture.createView(),
+        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store'
+      }]
+    });
+
+    renderPass.setPipeline(script.renderPipeline);
+    renderPass.setBindGroup(0, script.bindGroup);
+    renderPass.draw(3);
+    renderPass.end();
   }
 
   updateMousePosition(x, y) {
@@ -412,12 +441,12 @@ class ScriptEngine {
     if (script) {
       script.texture?.destroy();
       script.uniformBuffer?.destroy();
+      script.storageBuffer?.destroy();
       this.scripts.delete(scriptId);
     }
   }
 
   async rebuildAllBindGroups() {
-    // Rebuild all bind groups when scripts change
     for (const [scriptId, scriptData] of this.scripts) {
       await this.rebuildBindGroup(scriptId);
     }
@@ -431,15 +460,58 @@ class ScriptEngine {
       { binding: 0, resource: { buffer: script.uniformBuffer } }
     ];
 
+    // Get available scripts from the current shader
+    const shader = get(activeShader);
     let bindingIndex = 1;
-    for (const [id, scriptData] of this.scripts) {
-      if (id !== scriptId && scriptData.texture) {
-        bindGroupEntries.push(
-          { binding: bindingIndex, resource: scriptData.texture.createView() },
-          { binding: bindingIndex + 1, resource: script.sampler }
-        );
-        bindingIndex += 2;
+    
+    if (shader && shader.shader_scripts) {
+      for (const shaderScript of shader.shader_scripts) {
+        if (shaderScript.id !== scriptId) {
+          const compiledScript = this.scripts.get(shaderScript.id);
+          const scriptKind = shaderScript.kind || 'fragment';
+          
+          if (scriptKind === 'compute') {
+            // Storage buffer binding for compute scripts
+            if (compiledScript && compiledScript.storageBuffer) {
+              bindGroupEntries.push({
+                binding: bindingIndex,
+                resource: { buffer: compiledScript.storageBuffer }
+              });
+            } else {
+              // Create placeholder storage buffer if script not compiled yet
+              const placeholderBuffer = this.device.createBuffer({
+                size: 4 * 4 * 4, // minimal vec4<f32>
+                usage: GPUBufferUsage.STORAGE
+              });
+              bindGroupEntries.push({
+                binding: bindingIndex,
+                resource: { buffer: placeholderBuffer }
+              });
+            }
+            bindingIndex += 1;
+          } else {
+            // Texture bindings for fragment scripts
+            if (compiledScript && compiledScript.texture) {
+              bindGroupEntries.push(
+                { binding: bindingIndex, resource: compiledScript.texture.createView() },
+                { binding: bindingIndex + 1, resource: script.sampler }
+              );
+            } else {
+              // Use placeholder if script not compiled yet
+              bindGroupEntries.push(
+                { binding: bindingIndex, resource: script.texture.createView() },
+                { binding: bindingIndex + 1, resource: script.sampler }
+              );
+            }
+            bindingIndex += 2;
+          }
+        }
       }
+    }
+
+    // For compute, append storage buffer binding for output at the end
+    if (script.kind === 'compute' && script.storageBuffer) {
+      bindGroupEntries.push({ binding: bindingIndex, resource: { buffer: script.storageBuffer } });
     }
 
     script.bindGroup = this.device.createBindGroup({
@@ -448,6 +520,15 @@ class ScriptEngine {
       entries: bindGroupEntries
     });
   }
+
+  clearAll() {
+    for (const [id, s] of this.scripts) {
+      try { s.texture?.destroy(); } catch {}
+      try { s.uniformBuffer?.destroy(); } catch {}
+      try { s.storageBuffer?.destroy(); } catch {}
+    }
+    this.scripts.clear();
+  }
 }
 
 class WebGPUWorkspace {
@@ -455,26 +536,22 @@ class WebGPUWorkspace {
     this.device = null;
     this.context = null;
     this.canvas = null;
-    this.shaderCompiler = new ShaderCompiler();
+    this.canvasFormat = null;
     this.scriptEngine = null;
     this.animationId = null;
     this.isRealTimeRunning = false;
-    this.currentProjectId = null;
-    this.autoSaveTimeout = null;
-    this.autoSaveInterval = null;
+    this.copyPipeline = null;
+    this.copySampler = null;
+    this.isInitialized = false;
   }
 
   async initialize() {
     try {
-      setInitializing(true);
-      addConsoleMessage('Initializing WebGPU workspace...', 'info');
 
-      // Check WebGPU support
       if (!navigator.gpu) {
         throw new Error('WebGPU not supported in this browser');
       }
 
-      // Request adapter and device
       const adapter = await navigator.gpu.requestAdapter();
       if (!adapter) {
         throw new Error('No WebGPU adapter found');
@@ -482,38 +559,28 @@ class WebGPUWorkspace {
 
       this.device = await adapter.requestDevice();
       
-      // Setup canvas
       this.canvas = document.getElementById('webgpu-canvas');
       if (!this.canvas) {
         throw new Error('WebGPU canvas not found');
       }
 
       this.context = this.canvas.getContext('webgpu');
-      const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+      this.canvasFormat = navigator.gpu.getPreferredCanvasFormat();
       
       this.context.configure({
         device: this.device,
-        format: canvasFormat,
+        format: this.canvasFormat,
         alphaMode: 'premultiplied'
       });
 
-      // Initialize script engine
-      this.scriptEngine = new ScriptEngine(this.device, this.shaderCompiler);
+      this.scriptEngine = new ScriptEngine(this.device, /* shaderCompiler */ null);
 
-      // Setup mouse tracking
       this.setupMouseTracking();
+      this.isInitialized = true;
 
-      // Load initial scripts
-      await this.loadInitialScripts();
-
-      setWebGPUReady(true);
-      addConsoleMessage('WebGPU workspace initialized successfully', 'success');
     } catch (error) {
-      setError(error.message);
-      addConsoleMessage(`Initialization failed: ${error.message}`, 'error');
+      console.error(`Initialization failed: ${error.message}`);
       throw error;
-    } finally {
-      setInitializing(false);
     }
   }
 
@@ -521,186 +588,16 @@ class WebGPUWorkspace {
     this.canvas.addEventListener('mousemove', (e) => {
       const rect = this.canvas.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
-      const y = 1.0 - (e.clientY - rect.top) / rect.height; // Flip Y
+      const y = 1.0 - (e.clientY - rect.top) / rect.height;
       this.scriptEngine.updateMousePosition(x, y);
     });
-  }
-
-  async loadInitialScripts() {
-    const state = get(editorState);
-    console.log('loadInitialScripts: Current state:', state);
-    
-    // If we already have scripts loaded, use them
-    if (state.scripts && state.scripts.length > 0) {
-      console.log(`loadInitialScripts: Using existing shader data with ${state.scripts.length} scripts`);
-      addConsoleMessage(`Using existing shader data with ${state.scripts.length} scripts`, 'info');
-      
-      // Set the current project ID if we have a shader with an ID
-      if (state.shader?.id) {
-        this.currentProjectId = state.shader.id;
-        addConsoleMessage(`Loaded shader project: ${state.shader.name} (ID: ${state.shader.id})`, 'success');
-      }
-      
-      console.log('loadInitialScripts: Current activeScriptId:', state.activeScriptId);
-      
-      // Ensure we have an active script set
-      if (!state.activeScriptId && state.scripts.length > 0) {
-        console.log('loadInitialScripts: Setting active script to:', state.scripts[0].id);
-        const { editorActions } = await import('../stores/actions.js');
-        editorActions.setActiveScript(state.scripts[0].id);
-        addConsoleMessage(`Set active script to ${state.scripts[0].id}`, 'info');
-        
-        // Wait a bit for the state to update, then try to compile and show preview
-        setTimeout(async () => {
-          console.log('loadInitialScripts: Starting compileAndShowInitialPreview');
-          try {
-            await this.compileAndShowInitialPreview();
-          } catch (error) {
-            console.error('Failed to show initial preview:', error);
-          }
-        }, 100);
-      } else if (state.activeScriptId) {
-        console.log('loadInitialScripts: Active script already set:', state.activeScriptId);
-        // Still try to compile and show preview for the active script
-        setTimeout(async () => {
-          console.log('loadInitialScripts: Starting compileAndShowInitialPreview for existing active script');
-          try {
-            await this.compileAndShowInitialPreview();
-          } catch (error) {
-            console.error('Failed to show initial preview:', error);
-          }
-        }, 100);
-      }
-      
-      return;
-    }
-    
-    // Check if we're on an editor route with a shader ID
-    const pathMatch = window.location.pathname.match(/^\/(\d+)$/);
-    const shaderIdFromURL = pathMatch ? parseInt(pathMatch[1]) : null;
-    
-    // Also check for /new route
-    const isNewShader = window.location.pathname === '/new';
-    
-    if (shaderIdFromURL) {
-      try {
-        addConsoleMessage(`Loading shader ${shaderIdFromURL} from API...`, 'info');
-        const projectData = await loadShaderProject(shaderIdFromURL);
-        this.currentProjectId = projectData.id;
-        
-        // Update the editor state with loaded data
-        setShader(projectData);
-        replaceAllScripts(projectData.shader_scripts || []);
-        
-        addConsoleMessage(`Loaded shader project: ${projectData.name}`, 'success');
-        
-        // Wait for scripts to be loaded, then show initial preview
-        setTimeout(async () => {
-          console.log('loadInitialScripts: Starting compileAndShowInitialPreview for loaded project');
-          try {
-            await this.compileAndShowInitialPreview();
-          } catch (error) {
-            console.error('Failed to show initial preview:', error);
-          }
-        }, 100);
-        
-        return;
-      } catch (error) {
-        addConsoleMessage(`Failed to load shader project: ${error.message}`, 'error');
-        // Fall through to create new project
-      }
-    }
-    
-    // Create default project for new shaders or if loading failed
-    if (isNewShader || shaderIdFromURL) {
-      await this.createNewProject();
-    } else {
-      // Unknown route, create a local project
-      addConsoleMessage('Creating local project', 'info');
-      const defaultProject = createDefaultProject('Local Shader Project');
-      setShader(defaultProject);
-      replaceAllScripts(defaultProject.shader_scripts || []);
-    }
-  }
-
-  async compileAndShowInitialPreview() {
-    const state = get(editorState);
-    console.log('compileAndShowInitialPreview: Current state:', state);
-    
-    if (!state.activeScriptId || !state.scripts.length) {
-      console.log('compileAndShowInitialPreview: No active script or scripts available');
-      return;
-    }
-    
-    const activeScript = state.scripts.find(s => s.id === state.activeScriptId);
-    if (!activeScript) {
-      console.log('compileAndShowInitialPreview: Active script not found in scripts array');
-      return;
-    }
-    
-    console.log('compileAndShowInitialPreview: Found active script:', activeScript);
-    
-    try {
-      console.log('compileAndShowInitialPreview: Starting compilation...');
-      // Compile the active script
-      await this.compileScript(activeScript.id, activeScript.code, activeScript.buffer);
-      
-      console.log('compileAndShowInitialPreview: Starting execution...');
-      // Execute it to generate output
-      await this.scriptEngine.executeScript(activeScript.id);
-      
-      console.log('compileAndShowInitialPreview: Updating preview...');
-      // Update the preview
-      await this.updatePreview();
-      
-      addConsoleMessage(`Initial preview showing script ${activeScript.id}`, 'info');
-      console.log('compileAndShowInitialPreview: Success!');
-    } catch (error) {
-      console.error('compileAndShowInitialPreview: Error:', error);
-      addConsoleMessage(`Failed to show initial preview: ${error.message}`, 'warning');
-    }
-  }
-
-  async createNewProject() {
-    try {
-      const defaultProject = createDefaultProject('New Shader Project');
-      const savedProject = await saveShaderProject(null, defaultProject);
-      
-      this.currentProjectId = savedProject.id;
-      setShader(savedProject);
-      replaceAllScripts(savedProject.shader_scripts || []);
-      
-      addConsoleMessage(`Created new shader project: ${savedProject.name}`, 'success');
-    } catch (error) {
-      // Fallback to local-only mode if backend save fails
-      addConsoleMessage(`Backend unavailable, working in local mode`, 'warning');
-      const defaultProject = createDefaultProject('Local Shader Project');
-      setShader(defaultProject);
-      replaceAllScripts(defaultProject.shader_scripts || []);
-    }
-  }
-
-  async addScript() {
-    const state = get(editorState);
-    const newId = Math.max(0, ...state.scripts.map(s => s.id)) + 1;
-    
-    const newScript = createDefaultScript(newId);
-    
-    // Update local state immediately
-    const updatedScripts = [...state.scripts, newScript];
-    replaceAllScripts(updatedScripts);
-    
-    // Save entire project to backend
-    await this.saveCurrentProject();
-    
-    addConsoleMessage(`Added new script ${newId}`, 'success');
   }
 
   async compileScript(scriptId, code, bufferSpec) {
     try {
       await this.scriptEngine.createScript(scriptId, code, bufferSpec);
-      // Rebuild bind groups for all scripts since buffer dependencies changed
       await this.scriptEngine.rebuildAllBindGroups();
+      
       return true;
     } catch (error) {
       throw error;
@@ -709,58 +606,50 @@ class WebGPUWorkspace {
 
   async runAllScripts() {
     try {
-      setRunning(true);
-      const state = get(editorState);
+      const shader = get(activeShader);
       
-      addConsoleMessage('Running all scripts...', 'info');
-
-      // Compile all scripts first
-      for (const script of state.scripts) {
-        await this.compileScript(script.id, script.code, script.buffer);
+      if (!shader || !shader.shader_scripts) {
+        return; // Silently return if no scripts
       }
 
-      // Execute all scripts sequentially
-      for (const script of state.scripts) {
-        await this.scriptEngine.executeScript(script.id);
+      // Ensure compiled (only when changed)
+      for (const s of shader.shader_scripts) {
+        await this.scriptEngine.ensureCompiled(s.id, s.code, s.buffer);
+      }
+      // Rebuild once more in case cross-links changed
+      await this.scriptEngine.rebuildAllBindGroups();
+
+      // Execute producers before consumers (simple heuristic: by id asc)
+      const ordered = [...shader.shader_scripts].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+      for (const s of ordered) {
+        await this.scriptEngine.executeScript(s.id);
+        // Rebuild all bind groups after each script so consumers can sample the fresh texture
+        await this.scriptEngine.rebuildAllBindGroups();
       }
 
-      // Update preview with active script output
-      await this.updatePreview();
+      // Draw active script to canvas
+      const act = get(activeScript);
+      if (act) {
+        await this.updatePreview(act.id);
+      }
 
       this.scriptEngine.incrementFrame();
-      addConsoleMessage('All scripts executed successfully', 'success');
     } catch (error) {
-      addConsoleMessage(`Execution failed: ${error.message}`, 'error');
-      throw error;
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  async compileActiveScript() {
-    try {
-      const state = get(editorState);
-      const activeScript = state.scripts.find(s => s.id === state.activeScriptId);
-      
-      if (!activeScript) {
-        throw new Error('No active script to compile');
-      }
-
-      addConsoleMessage(`Compiling script ${activeScript.id}...`, 'info');
-      await this.compileScript(activeScript.id, activeScript.code, activeScript.buffer);
-      addConsoleMessage(`Script ${activeScript.id} compiled successfully`, 'success');
-    } catch (error) {
-      addConsoleMessage(`Compilation failed: ${error.message}`, 'error');
+      console.error(`Execution failed: ${error.message}`);
       throw error;
     }
   }
 
-  async updatePreview() {
-    const state = get(editorState);
-    const activeScript = this.scriptEngine.scripts.get(state.activeScriptId);
+  async updatePreview(scriptId) {
+    if (!scriptId) {
+      const script = get(activeScript);
+      scriptId = script?.id;
+    }
+
+    const activeScriptData = this.scriptEngine.scripts.get(scriptId);
     
-    if (!activeScript || !activeScript.texture) {
-      // Clear canvas if no active script
+    if (!activeScriptData || !activeScriptData.texture) {
+      // Clear canvas if no script
       const commandEncoder = this.device.createCommandEncoder();
       const canvasTexture = this.context.getCurrentTexture();
       
@@ -778,35 +667,12 @@ class WebGPUWorkspace {
       return;
     }
 
-    // Create a simple copy pipeline for texture to canvas
     const commandEncoder = this.device.createCommandEncoder();
     const canvasTexture = this.context.getCurrentTexture();
-    
-    // Create a simple full-screen copy shader
-    const copyShaderCode = `
-@vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
-    var pos = array<vec2<f32>, 3>(
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>( 3.0, -1.0),
-        vec2<f32>(-1.0,  3.0)
-    );
-    return vec4<f32>(pos[vertex_index], 0.0, 1.0);
-}
 
-@group(0) @binding(0) var sourceTexture: texture_2d<f32>;
-@group(0) @binding(1) var sourceSampler: sampler;
-
-@fragment
-fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
-    let uv = coord.xy / vec2<f32>(${this.canvas.width}, ${this.canvas.height});
-    return textureSample(sourceTexture, sourceSampler, uv);
-}`;
-
-    // Create or reuse copy pipeline
-    if (!this.copyPipeline) {
+  if (!this.copyPipeline) {
       const copyShaderModule = this.device.createShaderModule({
-        code: copyShaderCode
+        code: SAMPLE_TEXTURE_SHADER_SCRIPT
       });
 
       this.copyPipeline = this.device.createRenderPipeline({
@@ -820,7 +686,7 @@ fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
           module: copyShaderModule,
           entryPoint: 'fs_main',
           targets: [{
-            format: this.context.getPreferredFormat ? this.context.getPreferredFormat() : 'bgra8unorm'
+      format: this.canvasFormat
           }]
         },
         primitive: {
@@ -834,16 +700,14 @@ fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
       });
     }
 
-    // Create bind group for copy operation
     const copyBindGroup = this.device.createBindGroup({
       layout: this.copyPipeline.getBindGroupLayout(0),
       entries: [
-        { binding: 0, resource: activeScript.texture.createView() },
+        { binding: 0, resource: activeScriptData.texture.createView() },
         { binding: 1, resource: this.copySampler }
       ]
     });
 
-    // Render to canvas
     const renderPass = commandEncoder.beginRenderPass({
       colorAttachments: [{
         view: canvasTexture.createView(),
@@ -861,26 +725,19 @@ fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
     this.device.queue.submit([commandEncoder.finish()]);
   }
 
-  // Method to manually update preview for the current active script
-  async updatePreviewForActiveScript() {
-    await this.updatePreview();
-  }
-
   startRealTime() {
     if (this.isRealTimeRunning) return;
     
     this.isRealTimeRunning = true;
-    addConsoleMessage('Starting real-time mode...', 'info');
     
     const animate = async () => {
       if (!this.isRealTimeRunning) return;
       
       try {
-        await this.runAllScripts();
+  await this.runAllScripts();
       } catch (error) {
-        addConsoleMessage(`Real-time execution error: ${error.message}`, 'error');
+        // Only log significant errors, not missing scripts
       }
-      
       this.animationId = requestAnimationFrame(animate);
     };
     
@@ -893,248 +750,70 @@ fn fs_main(@builtin(position) coord: vec4<f32>) -> @location(0) vec4<f32> {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
-    addConsoleMessage('Stopped real-time mode', 'info');
   }
 
-  async saveShader() {
-    try {
-      setSaving(true);
-      const state = get(editorState);
-      
-      if (!state.shader) {
-        throw new Error('No shader data to save');
-      }
-
-      // Prepare complete shader data for saving
-      const shaderData = {
-        ...state.shader,
-        shader_scripts: state.scripts || []
-      };
-
-      let savedProject;
-      if (this.currentProjectId) {
-        // Update existing project
-        savedProject = await saveShaderProject(this.currentProjectId, shaderData);
-        addConsoleMessage('Shader project saved successfully', 'success');
-      } else {
-        // Create new project
-        savedProject = await saveShaderProject(null, shaderData);
-        this.currentProjectId = savedProject.id;
-        addConsoleMessage('Shader project created successfully', 'success');
-      }
-
-      // Preserve the current local name and user_id when updating from backend response
-      const currentName = state.shader.name;
-      const currentUserId = state.shader.user_id;
-      setShader({
-        ...savedProject,
-        name: currentName || savedProject.name,
-        user_id: currentUserId || savedProject.user_id
-      });
-      
-    } catch (error) {
-      addConsoleMessage(`Save failed: ${error.message}`, 'error');
-      throw error;
-    } finally {
-      setSaving(false);
-    }
+  dispose() {
+    try { this.stopRealTime(); } catch {}
+    try { this.scriptEngine?.clearAll(); } catch {}
+    this.copyPipeline = null;
+    this.copySampler = null;
+    this.isInitialized = false;
   }
 
-  async saveCurrentProject() {
-    if (!this.currentProjectId) return;
-
-    try {
-      const state = get(editorState);
-      if (!state.shader) return;
-
-      const shaderData = {
-        ...state.shader,
-        shader_scripts: state.scripts || []
-      };
-
-      await saveShaderProject(this.currentProjectId, shaderData);
-    } catch (error) {
-      addConsoleMessage(`Failed to sync to backend: ${error.message}`, 'warning');
-    }
-  }
-
-  async deleteScriptFromProject(scriptId) {
-    const state = get(editorState);
-    
-    // Remove from local state
-    const updatedScripts = state.scripts.filter(s => s.id !== scriptId);
-    replaceAllScripts(updatedScripts);
-    
-    // Remove from WebGPU engine
+  deleteScript(scriptId) {
     this.scriptEngine.deleteScript(scriptId);
-    
-    // Save entire project to backend
-    await this.saveCurrentProject();
-    
-    addConsoleMessage(`Deleted script ${scriptId}`, 'success');
-  }
-
-  // Auto-save functionality for better UX
-  async autoSave() {
-    if (!this.currentProjectId) return;
-
-    try {
-      const state = get(editorState);
-      if (!state.shader) return;
-
-      const shaderData = {
-        ...state.shader,
-        shader_scripts: state.scripts || []
-      };
-
-      await saveShaderProject(this.currentProjectId, shaderData);
-      // Silent auto-save, don't show success message
-    } catch (error) {
-      // Silent failure for auto-save, but log for debugging
-      console.warn('Auto-save failed:', error);
-    }
-  }
-
-  async deleteShader() {
-    try {
-      setSaving(true);
-      const state = get(editorState);
-      
-      if (!state.shader?.id) {
-        throw new Error('Cannot delete unsaved shader');
-      }
-
-      if (!this.currentProjectId) {
-        throw new Error('No project ID available for deletion');
-      }
-
-      // Import the delete function
-      const { deleteShaderProject } = await import('../stores/api.js');
-      
-      // Delete from backend
-      await deleteShaderProject(this.currentProjectId);
-      
-      addConsoleMessage('Shader deleted successfully', 'success');
-      
-      // Redirect to home page after successful deletion
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1000);
-      
-    } catch (error) {
-      addConsoleMessage(`Delete failed: ${error.message}`, 'error');
-      throw error;
-    } finally {
-      setSaving(false);
-    }
   }
 }
 
-// Global workspace instance
 let workspace = null;
 
-// Exported functions
 export async function initWorkspace() {
   if (!workspace) {
     workspace = new WebGPUWorkspace();
-    registerWorkspace(workspace);
-    // Make workspace available globally for CodeEditor
     window.__workspaceRef = workspace;
   }
   await workspace.initialize();
-}
-
-export async function runAll() {
-  if (!workspace) throw new Error('Workspace not initialized');
-  await workspace.runAllScripts();
-}
-
-export async function compileActive() {
-  if (!workspace) throw new Error('Workspace not initialized');
-  await workspace.compileActiveScript();
-}
-
-export async function saveShader() {
-  if (!workspace) throw new Error('Workspace not initialized');
-  await workspace.saveShader();
+  return workspace;
 }
 
 export function startRealTime() {
-  if (!workspace) throw new Error('Workspace not initialized');
+  if (!workspace || !workspace.isInitialized) {
+    throw new Error('Workspace not initialized');
+  }
   workspace.startRealTime();
 }
 
 export function stopRealTime() {
-  if (!workspace) throw new Error('Workspace not initialized');
+  if (!workspace || !workspace.isInitialized) {
+    throw new Error('Workspace not initialized');
+  }
   workspace.stopRealTime();
 }
 
-export async function addScript() {
-  if (!workspace) throw new Error('Workspace not initialized');
-  await workspace.addScript();
-}
-
-export async function deleteScript(scriptId) {
-  if (!workspace) throw new Error('Workspace not initialized');
-  await workspace.deleteScriptFromProject(scriptId);
-}
-
-// Auto-save with debouncing - saves complete project after code changes
-export async function updateScriptCode(scriptId, code) {
-  if (!workspace) return;
-  
-  // Debounced auto-save to backend - saves entire project
-  clearTimeout(workspace.autoSaveTimeout);
-  workspace.autoSaveTimeout = setTimeout(async () => {
-    await workspace.saveCurrentProject();
-  }, 2000); // Auto-save after 2 seconds of inactivity
-}
-
-// Auto-save interval for periodic saves
-export function startAutoSave() {
-  if (!workspace) return;
-  
-  workspace.autoSaveInterval = setInterval(async () => {
-    await workspace.autoSave();
-  }, 30000); // Auto-save every 30 seconds
-}
-
-export function stopAutoSave() {
-  if (!workspace) return;
-  
-  if (workspace.autoSaveInterval) {
-    clearInterval(workspace.autoSaveInterval);
-    workspace.autoSaveInterval = null;
-  }
-  
-  if (workspace.autoSaveTimeout) {
-    clearTimeout(workspace.autoSaveTimeout);
-    workspace.autoSaveTimeout = null;
-  }
-}
-
-// Store for real-time running state
-import { writable } from 'svelte/store';
-export const isRealTimeRunning = writable(false);
-
-// Update the store when real-time state changes
-if (typeof window !== 'undefined') {
-  let lastRealTimeState = false;
-  setInterval(() => {
-    const currentState = workspace?.isRealTimeRunning || false;
-    if (currentState !== lastRealTimeState) {
-      isRealTimeRunning.set(currentState);
-      lastRealTimeState = currentState;
-    }
-  }, 100);
-}
-
 export async function updatePreview() {
-  if (!workspace) throw new Error('Workspace not initialized');
-  await workspace.updatePreviewForActiveScript();
+  if (!workspace || !workspace.isInitialized) {
+    await initWorkspace();
+  }
+  await workspace.updatePreview();
 }
 
-export async function deleteShader() {
-  if (!workspace) throw new Error('Workspace not initialized');
-  await workspace.deleteShader();
+export function deleteScriptFromWorkspace(scriptId) {
+  if (!workspace) return;
+  workspace.deleteScript(scriptId);
+}
+
+export function getWorkspace() {
+  return workspace;
+}
+
+// Keep track of real-time state
+export function isRealTimeRunning() {
+  return workspace?.isRealTimeRunning || false;
+}
+
+export function resetWorkspace() {
+  if (workspace) {
+    workspace.dispose();
+    workspace = null;
+  }
 }

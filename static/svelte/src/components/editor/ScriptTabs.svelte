@@ -1,97 +1,86 @@
 <script>
-  import { 
-    editorScripts, 
-    editorActiveScript, 
-    editorActiveScriptId 
-  } from '../../stores/selectors.js';
-  import { editorActions } from '../../stores/actions.js';
-  import { addScript, updatePreview, deleteScript } from '../../adapters/workspaceAdapter.js';
+  import { addNewScript, deleteScript, activeShader, activeScriptIndex, activeScript, isEditingCommonScript } from '../../stores/activeShader.js';
   import BufferControls from './BufferControls.svelte';
-  
-  async function select(id) { 
-    editorActions.setActiveScript(id);
-    // Compile and execute the script when switching tabs, then update preview
-    try {
-      const workspace = window.__workspaceRef;
-      if (workspace && workspace.scriptEngine) {
-        const script = $editorScripts?.find(s => s.id === id);
-        
-        if (script) {
-          // Check if script is already compiled
-          if (!workspace.scriptEngine.scripts.has(id)) {
-            // Compile the script first
-            await workspace.compileScript(id, script.code, script.buffer);
-          }
-          
-          // Execute the script to generate fresh output
-          await workspace.scriptEngine.executeScript(id);
-          
-          // Update preview
-          await updatePreview();
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to compile/execute script when switching tabs:', error);
-    }
-  }
-  
-  function add(){ addScript(); }
-  
-  $: scripts = $editorScripts || [];
-  $: active = $editorActiveScriptId;
-  $: activeScript = $editorActiveScript;
-  
-  function handleBufferChange(event) {
-    if (activeScript) {
-      editorActions.updateScriptBuffer(activeScript.id, event.detail);
-    }
-  }
-  
-  async function deleteScriptHandler(scriptId, event) {
-    event.stopPropagation(); // Prevent tab selection when clicking X
-    
-    // Don't allow deleting the last script
-    if (scripts.length <= 1) {
-      return;
-    }
-    
-    try {
-      await deleteScript(scriptId);
-    } catch (error) {
-      console.error('Failed to delete script:', error);
-      editorActions.addConsoleMessage(`Failed to delete script: ${error.message}`, 'error');
+
+  function setActiveTab(index) {
+    if (index === -1) {
+      isEditingCommonScript.set(true);
+    } else {
+      isEditingCommonScript.set(false);
+      activeScriptIndex.set(index);
     }
   }
 </script>
 
 <div class="script-tabs-container">
   <div class="script-tabs">
-    {#each scripts as sc}
+    <!-- Common Script Tab -->
+    <div class="tab-wrapper">
+      <button class="tab-btn {$isEditingCommonScript ? 'active':''}" on:click={() => setActiveTab(-1)}>
+        <span class="tab-content">
+          Common
+          <span class="buffer-indicator">Shared script</span>
+        </span>
+      </button>
+    </div>
+
+    <!-- Regular Script Tabs -->
+    {#if $activeShader && $activeShader.shader_scripts}
+    {#each $activeShader.shader_scripts as sc, index}
       <div class="tab-wrapper">
-        <button class="tab-btn {active===sc.id ? 'active':''}" on:click={() => select(sc.id)}>
+        <button class="tab-btn {$activeScriptIndex === index && !$isEditingCommonScript ? 'active':''}" on:click={() => setActiveTab(index)}>
           <span class="tab-content">
             Script {sc.id}
             <span class="buffer-indicator">{sc.buffer?.width || 512}×{sc.buffer?.height || 512}</span>
           </span>
-          {#if scripts.length > 1}
+          {#if $activeShader.shader_scripts.length > 1}
             <button 
               class="tab-close" 
-              on:click={(e) => deleteScriptHandler(sc.id, e)}
+              on:click={(e) => {
+                e.stopPropagation();
+                deleteScript(index);
+                // If we deleted the active script, switch to common script
+                if ($activeScriptIndex === index) {
+                  setActiveTab(-1);
+                }
+              }}
               title="Delete script"
-              aria-label="Delete script {sc.id}"
+              aria-label="Delete script {index}"
             >×</button>
           {/if}
         </button>
       </div>
     {/each}
-    <button class="tab-btn add" on:click={add} title="Add script">+</button>
+    {/if}
+    <button class="tab-btn add" on:click={addNewScript} title="Add script">+</button>
   </div>
   
-  {#if activeScript}
-    <BufferControls 
-      buffer={activeScript.buffer || { format: 'rgba8unorm', width: 512, height: 512 }}
-      on:change={handleBufferChange}
-    />
+  <!-- Show BufferControls only for regular scripts, not common script -->
+  {#if $activeScript && !$isEditingCommonScript}
+    {#key $activeScript.id}
+      <BufferControls 
+        buffer={{ ...($activeScript.buffer || { format: 'rgba8unorm', width: 512, height: 512 }) }}
+        kind={$activeScript.kind || 'fragment'}
+        compute={{ workgroupSize: { ...($activeScript.compute?.workgroupSize || { x: 16, y: 16, z: 1 }) } }}
+        on:change={(e) => {
+          const { buffer, kind, compute } = e.detail;
+          activeShader.update(shader => {
+            if (!(shader && shader.shader_scripts && shader.shader_scripts[$activeScriptIndex])) return shader;
+            // Immutable updates to trigger reactivity
+            const idx = $activeScriptIndex;
+            const nextScripts = shader.shader_scripts.slice();
+            const prev = nextScripts[idx] || {};
+            nextScripts[idx] = {
+              ...prev,
+              buffer: { ...buffer },
+              kind,
+              compute: kind === 'compute' ? { ...(compute || {}), workgroupSize: { ...(compute?.workgroupSize || { x:16,y:16,z:1 }) } } : null,
+            };
+            return { ...shader, shader_scripts: nextScripts };
+          });
+        }}
+      />
+    {/key}
   {/if}
 </div>
 

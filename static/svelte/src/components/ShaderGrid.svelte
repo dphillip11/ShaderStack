@@ -1,9 +1,8 @@
 <script>
   import ShaderCard from './ShaderCard.svelte';
   import { createEventDispatcher } from 'svelte';
-  import { displayShaders } from '../stores/selectors.js';
   
-  $: list = $displayShaders;
+  export let list = [];
   const dispatch = createEventDispatcher();
 
   function handleDelete(event) {

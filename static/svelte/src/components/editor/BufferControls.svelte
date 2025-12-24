@@ -2,6 +2,11 @@
   import { createEventDispatcher } from 'svelte';
   
   export let buffer = { format: 'rgba8unorm', width: 512, height: 512 };
+  export let kind = 'fragment'; // 'fragment' | 'compute'
+
+  // Ensure internal state follows prop changes
+  $: buffer;
+  $: kind;
   
   const dispatch = createEventDispatcher();
   
@@ -14,12 +19,18 @@
     'rg8unorm'
   ];
   
-  function updateBuffer() {
-    dispatch('change', buffer);
-  }
+  function updateBuffer() { dispatch('change', { buffer: { ...buffer }, kind }); }
+  function updateKind(e) { kind = e.target.value; updateBuffer(); }
 </script>
 
 <div class="buffer-controls">
+  <div class="buffer-field">
+    <label for="kind">Type</label>
+    <select id="kind" bind:value={kind} on:change={updateKind}>
+      <option value="fragment">Fragment</option>
+      <option value="compute">Compute</option>
+    </select>
+  </div>
   <div class="buffer-field">
     <label for="format">Format</label>
     <select id="format" bind:value={buffer.format} on:change={updateBuffer}>
@@ -80,6 +91,9 @@
     font-size: 0.8rem;
     min-width: 80px;
   }
+
+  .wg-row { display: flex; align-items: center; gap: 0.25rem; }
+  .wg-row input { width: 70px; }
   
   .buffer-field select:focus,
   .buffer-field input:focus {
