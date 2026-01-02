@@ -40,8 +40,16 @@ jobs:
         run: |
           cd static/svelte
           npm run build
+          touch dist/.nojekyll
         env:
           GITHUB_ACTIONS: true
+
+      - name: List build output
+        run: |
+          echo "Contents of static/svelte/dist:"
+          ls -la static/svelte/dist/
+          echo "Contents of index.html:"
+          cat static/svelte/dist/index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
