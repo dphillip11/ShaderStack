@@ -6,8 +6,7 @@ export default defineConfig({
   plugins: [svelte()],
   root: './src',
   // Set base path for GitHub Pages deployment
-  // Change 'WebGPU' to your repo name if different
-  base: process.env.GITHUB_ACTIONS ? '/WebGPU/' : '/',
+  base: process.env.GITHUB_ACTIONS ? '/ShaderStack/' : '/',
   resolve: {
     alias: {
       '@legacy': path.resolve(__dirname, '../js')
