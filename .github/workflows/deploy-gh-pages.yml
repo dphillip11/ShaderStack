@@ -40,6 +40,8 @@ jobs:
         run: |
           cd static/svelte
           npm run build
+        env:
+          GITHUB_ACTIONS: true
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
