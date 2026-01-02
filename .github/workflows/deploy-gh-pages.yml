@@ -47,7 +47,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './static/dist'
+          path: './static/svelte/dist'
 
   deploy:
     environment:
