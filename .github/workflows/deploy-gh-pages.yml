@@ -48,6 +48,10 @@ jobs:
         run: |
           echo "Contents of static/svelte/dist:"
           ls -la static/svelte/dist/
+          echo ""
+          echo "Contents of static/svelte/dist/assets:"
+          ls -la static/svelte/dist/assets/
+          echo ""
           echo "Contents of index.html:"
           cat static/svelte/dist/index.html
 
@@ -57,7 +61,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './static/svelte/dist'
+          path: 'static/svelte/dist'
 
   deploy:
     environment:
